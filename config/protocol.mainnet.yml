@@ -3,7 +3,7 @@ ProtocolConfiguration:
   AddressVersion: 23
   SecondsPerBlock: 15
   EnableStateRoot: true
-  StateRootEnableIndex: 6016000
+  StateRootEnableIndex: 0
   LowPriorityThreshold: 0.001
   MemPoolSize: 50000
   StandbyValidators:
@@ -30,7 +30,7 @@ ProtocolConfiguration:
     IssueTransaction: 500
     PublishTransaction: 500
     RegisterTransaction: 10000
-  VerifyBlocks: true
+  VerifyBlocks: false
   VerifyTransactions: false
   FreeGasLimit: {0: 10.0, 6195000: 50.0}
   MaxTransactionsPerBlock: {0: 500, 6195000: 200}
