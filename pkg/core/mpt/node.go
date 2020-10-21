@@ -27,6 +27,17 @@ type NodeObject struct {
 	Node
 }
 
+// extendedNodeObject extends NodeObject with gc-related info.
+type extendedNodeObject struct {
+	NodeObject
+	RefCount uint32
+}
+
+type nodeWrapper interface {
+	Node
+	getNode() Node
+}
+
 // Node represents common interface of all MPT nodes.
 type Node interface {
 	io.Serializable
@@ -43,6 +54,22 @@ func (n NodeObject) EncodeBinary(w *io.BinWriter) {
 // DecodeBinary implements io.Serializable.
 func (n *NodeObject) DecodeBinary(r *io.BinReader) {
 	n.Node = DecodeNodeWithType(r)
+}
+
+func (n NodeObject) getNode() Node {
+	return n.Node
+}
+
+// EncodeBinary implements io.Serializable.
+func (n extendedNodeObject) EncodeBinary(w *io.BinWriter) {
+	n.NodeObject.EncodeBinary(w)
+	w.WriteU32LE(n.RefCount)
+}
+
+// DecodeBinary implements io.Serializable.
+func (n *extendedNodeObject) DecodeBinary(r *io.BinReader) {
+	n.NodeObject.DecodeBinary(r)
+	n.RefCount = r.ReadU32LE()
 }
 
 // UnmarshalJSON implements json.Unmarshaler.

@@ -22,6 +22,10 @@ type (
 		AddressVersion byte `yaml:"AddressVersion"`
 		// EnableStateRoot specifies if exchange of state roots should be enabled.
 		EnableStateRoot bool `yaml:"EnableStateRoot"`
+		// EnableMPTGC specifies if MPT GC should be enabled.
+		// If true, DB size will be smaller, but older roots won't be accessible.
+		// This value should remain the same for the same database.
+		EnableMPTGC bool `yaml:"EnableMPTGC"`
 		// FeePerExtraByte sets the expected per-byte fee for
 		// transactions exceeding the MaxFreeTransactionSize.
 		FeePerExtraByte float64 `yaml:"FeePerExtraByte"`

@@ -510,16 +510,27 @@ func makeStateRootKey(height uint32) []byte {
 }
 
 // InitMPT initializes MPT at the given height.
-func (dao *Simple) InitMPT(height uint32) error {
+func (dao *Simple) InitMPT(height uint32, enableGC bool) error {
+	var gcKey = []byte{byte(storage.DataMPT), 1}
 	if height == 0 {
-		dao.MPT = mpt.NewTrie(nil, dao.Store)
-		return nil
+		dao.MPT = mpt.NewTrie(nil, enableGC, dao.Store)
+		var val byte
+		if enableGC {
+			val = 1
+		}
+		return dao.Store.Put(gcKey, []byte{val})
+	}
+	v, err := dao.Store.Get(gcKey)
+	if err != nil {
+		return fmt.Errorf("MPT GC info not found: %w", err)
+	} else if hasGC := v[0] != 0; hasGC != enableGC {
+		return fmt.Errorf("MPT GC setting mismatch: old=%v, new=%v", hasGC, enableGC)
 	}
 	r, err := dao.GetStateRoot(height)
 	if err != nil {
 		return err
 	}
-	dao.MPT = mpt.NewTrie(mpt.NewHashNode(r.Root), dao.Store)
+	dao.MPT = mpt.NewTrie(mpt.NewHashNode(r.Root), enableGC, dao.Store)
 	return nil
 }
 
