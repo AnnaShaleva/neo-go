@@ -1527,13 +1527,13 @@ func (bc *Blockchain) GetEnrollments() ([]state.Validator, error) {
 }
 
 // GetTestVM returns a VM and a Store setup for a test run of some sort of code.
-func (bc *Blockchain) GetTestVM(tx *transaction.Transaction) *vm.VM {
+func (bc *Blockchain) GetTestVM(tx *transaction.Transaction, trig trigger.Type) (*dao.Cached, *vm.VM) {
 	d := bc.dao.GetWrapped().(*dao.Simple)
 	d.MPT = nil
-	systemInterop := bc.newInteropContext(trigger.Application, d, nil, tx)
+	systemInterop := bc.newInteropContext(trig, d, nil, tx)
 	vm := systemInterop.SpawnVM()
 	vm.SetPriceGetter(getPrice)
-	return vm
+	return systemInterop.DAO, vm
 }
 
 // Various witness verification errors.
@@ -1545,8 +1545,8 @@ var (
 	ErrInvalidVerificationContract = errors.New("verification contract is missing `verify` method")
 )
 
-// initVerificationVM initializes VM for witness check.
-func (bc *Blockchain) initVerificationVM(ic *interop.Context, hash util.Uint160, witness *transaction.Witness) error {
+// InitVerificationVM initializes VM for witness check.
+func (bc *Blockchain) InitVerificationVM(v *vm.VM, dao dao.DAO, hash util.Uint160, witness *transaction.Witness) error {
 	var offset int
 	var isNative bool
 	var initMD *manifest.Method
@@ -1559,7 +1559,7 @@ func (bc *Blockchain) initVerificationVM(ic *interop.Context, hash util.Uint160,
 			return ErrNativeContractWitness
 		}
 	} else {
-		cs, err := ic.DAO.GetContractState(hash)
+		cs, err := dao.GetContractState(hash)
 		if err != nil {
 			return ErrUnknownVerificationContract
 		}
@@ -1573,7 +1573,6 @@ func (bc *Blockchain) initVerificationVM(ic *interop.Context, hash util.Uint160,
 		isNative = cs.ID < 0
 	}
 
-	v := ic.VM
 	v.LoadScriptWithFlags(verification, smartcontract.NoneFlag)
 	v.Jump(v.Context(), offset)
 	if isNative {
@@ -1609,7 +1608,7 @@ func (bc *Blockchain) verifyHashAgainstScript(hash util.Uint160, witness *transa
 	vm := interopCtx.SpawnVM()
 	vm.SetPriceGetter(getPrice)
 	vm.GasLimit = gas
-	if err := bc.initVerificationVM(interopCtx, hash, witness); err != nil {
+	if err := bc.InitVerificationVM(interopCtx.VM, interopCtx.DAO, hash, witness); err != nil {
 		return 0, err
 	}
 	err := vm.Run()

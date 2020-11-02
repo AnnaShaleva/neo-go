@@ -28,7 +28,7 @@ type Invoke struct {
 type invokeAux struct {
 	State          string          `json:"state"`
 	GasConsumed    int64           `json:"gasconsumed,string"`
-	Script         []byte          `json:"script"`
+	Script         []byte          `json:"script,omitempty"`
 	Stack          json.RawMessage `json:"stack"`
 	FaultException string          `json:"exception,omitempty"`
 	Transaction    string          `json:"tx,omitempty"`

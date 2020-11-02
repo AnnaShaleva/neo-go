@@ -70,6 +70,7 @@ const (
 	NotificationFilterT
 	ExecutionFilterT
 	Signer
+	WitnessT
 )
 
 var errMissingParameter = errors.New("parameter is missing")
@@ -250,6 +251,19 @@ func (p Param) GetSigners() ([]transaction.Signer, error) {
 	return signers, nil
 }
 
+// GetWitness returns transaction.Witness value of the parameter if
+// it is a valid transaction witness.
+func (p *Param) GetWitness() (transaction.Witness, error) {
+	if p == nil {
+		return transaction.Witness{}, errMissingParameter
+	}
+	w, ok := p.Value.(transaction.Witness)
+	if !ok {
+		return transaction.Witness{}, errors.New("not a witness")
+	}
+	return w, nil
+}
+
 // UnmarshalJSON implements json.Unmarshaler interface.
 func (p *Param) UnmarshalJSON(data []byte) error {
 	var s string
@@ -264,6 +278,7 @@ func (p *Param) UnmarshalJSON(data []byte) error {
 		{NotificationFilterT, &NotificationFilter{}},
 		{ExecutionFilterT, &ExecutionFilter{}},
 		{Signer, &transaction.Signer{}},
+		{WitnessT, &transaction.Witness{}},
 		{ArrayT, &[]Param{}},
 	}
 
@@ -299,6 +314,8 @@ func (p *Param) UnmarshalJSON(data []byte) error {
 					continue
 				}
 			case *transaction.Signer:
+				p.Value = *val
+			case *transaction.Witness:
 				p.Value = *val
 			case *[]Param:
 				p.Value = *val

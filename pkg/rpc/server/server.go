@@ -30,6 +30,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/rpc/response"
 	"github.com/nspcc-dev/neo-go/pkg/rpc/response/result"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"go.uber.org/zap"
 )
@@ -108,6 +109,7 @@ var rpcHandlers = map[string]func(*Server, request.Params) (interface{}, *respon
 	"sendrawtransaction":     (*Server).sendrawtransaction,
 	"submitblock":            (*Server).submitBlock,
 	"validateaddress":        (*Server).validateAddress,
+	"verifywitness":          (*Server).verifyWitness,
 }
 
 var rpcWsHandlers = map[string]func(*Server, request.Params, *subscriber) (interface{}, *response.Error){
@@ -801,6 +803,18 @@ func (s *Server) contractScriptHashFromParam(param *request.Param) (util.Uint160
 	return result, nil
 }
 
+// transactionFromParam returns transaction deserialized from parameter.
+func (s *Server) transactionFromParam(param *request.Param) (*transaction.Transaction, error) {
+	if param == nil {
+		return nil, errors.New("parameter is nil")
+	}
+	byteTx, err := param.GetBytesHex()
+	if err != nil {
+		return nil, err
+	}
+	return transaction.NewTransactionFromBytes(s.network, byteTx)
+}
+
 func (s *Server) getStorage(ps request.Params) (interface{}, *response.Error) {
 	id, rErr := s.contractIDFromParam(ps.Value(0))
 	if rErr == response.ErrUnknown {
@@ -1001,6 +1015,7 @@ func (s *Server) invokeFunction(reqParams request.Params) (interface{}, *respons
 	if len(tx.Signers) == 0 {
 		tx.Signers = []transaction.Signer{{Account: util.Uint160{}, Scopes: transaction.None}}
 	}
+
 	script, err := request.CreateFunctionInvocationScript(scriptHash, reqParams[1:checkWitnessHashesIndex])
 	if err != nil {
 		return nil, response.NewInternalServerError("can't create invocation script", err)
@@ -1035,10 +1050,43 @@ func (s *Server) invokescript(reqParams request.Params) (interface{}, *response.
 	return s.runScriptInVM(script, tx), nil
 }
 
+// verifyWitness implements `verifywitness` RPC call.Я
+func (s *Server) verifyWitness(reqParams request.Params) (interface{}, *response.Error) {
+	tx, err := s.transactionFromParam(reqParams.Value(0))
+	if err != nil {
+		return nil, response.ErrInvalidParams
+	}
+	signerIndex, err := reqParams.ValueWithType(1, request.NumberT).GetInt()
+	if err != nil {
+		return nil, response.ErrInvalidParams
+	}
+	if signerIndex < 0 || len(tx.Signers) > signerIndex+1 {
+		return nil, response.ErrInvalidParams
+	}
+	witness, err := reqParams.ValueWithType(2, request.WitnessT).GetWitness()
+	if err != nil {
+		return nil, response.ErrInvalidParams
+	}
+	dao, vm := s.chain.GetTestVM(tx, trigger.Verification)
+	vm.GasLimit = int64(s.config.MaxGasInvoke)
+	s.chain.InitVerificationVM(vm, dao, tx.Signers[signerIndex].Account, &witness)
+	err = vm.Run()
+	var faultException string
+	if err != nil {
+		faultException = err.Error()
+	}
+	return &result.Invoke{
+		State:          vm.State().String(),
+		GasConsumed:    vm.GasConsumed(),
+		Stack:          vm.Estack().ToArray(),
+		FaultException: faultException,
+	}, nil
+}
+
 // runScriptInVM runs given script in a new test VM and returns the invocation
 // result.
 func (s *Server) runScriptInVM(script []byte, tx *transaction.Transaction) *result.Invoke {
-	vm := s.chain.GetTestVM(tx)
+	_, vm := s.chain.GetTestVM(tx, trigger.Application)
 	vm.GasLimit = int64(s.config.MaxGasInvoke)
 	vm.LoadScriptWithFlags(script, smartcontract.All)
 	err := vm.Run()
@@ -1085,35 +1133,28 @@ func (s *Server) submitBlock(reqParams request.Params) (interface{}, *response.E
 func (s *Server) sendrawtransaction(reqParams request.Params) (interface{}, *response.Error) {
 	var resultsErr *response.Error
 	var results interface{}
-
-	if len(reqParams) < 1 {
+	tx, err := s.transactionFromParam(reqParams.Value(0))
+	if err != nil {
 		return nil, response.ErrInvalidParams
-	} else if byteTx, err := reqParams[0].GetBytesHex(); err != nil {
-		return nil, response.ErrInvalidParams
-	} else {
-		tx, err := transaction.NewTransactionFromBytes(s.network, byteTx)
-		if err != nil {
-			return nil, response.ErrInvalidParams
+	}
+	relayReason := s.coreServer.RelayTxn(tx)
+	switch relayReason {
+	case network.RelaySucceed:
+		results = result.RelayResult{
+			Hash: tx.Hash(),
 		}
-		relayReason := s.coreServer.RelayTxn(tx)
-		switch relayReason {
-		case network.RelaySucceed:
-			results = result.RelayResult{
-				Hash: tx.Hash(),
-			}
-		case network.RelayAlreadyExists:
-			resultsErr = response.ErrAlreadyExists
-		case network.RelayOutOfMemory:
-			resultsErr = response.ErrOutOfMemory
-		case network.RelayUnableToVerify:
-			resultsErr = response.ErrUnableToVerify
-		case network.RelayInvalid:
-			resultsErr = response.ErrValidationFailed
-		case network.RelayPolicyFail:
-			resultsErr = response.ErrPolicyFail
-		default:
-			resultsErr = response.ErrUnknown
-		}
+	case network.RelayAlreadyExists:
+		resultsErr = response.ErrAlreadyExists
+	case network.RelayOutOfMemory:
+		resultsErr = response.ErrOutOfMemory
+	case network.RelayUnableToVerify:
+		resultsErr = response.ErrUnableToVerify
+	case network.RelayInvalid:
+		resultsErr = response.ErrValidationFailed
+	case network.RelayPolicyFail:
+		resultsErr = response.ErrPolicyFail
+	default:
+		resultsErr = response.ErrUnknown
 	}
 
 	return results, resultsErr

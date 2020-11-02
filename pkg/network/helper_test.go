@@ -10,6 +10,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/config"
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
+	"github.com/nspcc-dev/neo-go/pkg/core/dao"
 	"github.com/nspcc-dev/neo-go/pkg/core/mempool"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
@@ -18,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/network/capability"
 	"github.com/nspcc-dev/neo-go/pkg/network/payload"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"go.uber.org/zap/zaptest"
@@ -126,7 +128,10 @@ func (chain testChain) GetStateRoot(height uint32) (*state.MPTRootState, error) 
 func (chain testChain) GetStorageItem(id int32, key []byte) *state.StorageItem {
 	panic("TODO")
 }
-func (chain testChain) GetTestVM(tx *transaction.Transaction) *vm.VM {
+func (chain testChain) GetTestVM(tx *transaction.Transaction, trig trigger.Type) (*dao.Cached, *vm.VM) {
+	panic("TODO")
+}
+func (chain testChain) InitVerificationVM(v *vm.VM, dao dao.DAO, hash util.Uint160, witness *transaction.Witness) error {
 	panic("TODO")
 }
 func (chain testChain) GetStorageItems(id int32) (map[string]*state.StorageItem, error) {

@@ -5,11 +5,13 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/config"
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
+	"github.com/nspcc-dev/neo-go/pkg/core/dao"
 	"github.com/nspcc-dev/neo-go/pkg/core/mempool"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 )
@@ -24,6 +26,7 @@ type Blockchainer interface {
 	AddStateRoot(r *state.MPTRoot) error
 	CalculateClaimable(value *big.Int, startHeight, endHeight uint32) *big.Int
 	Close()
+	InitVerificationVM(v *vm.VM, dao dao.DAO, hash util.Uint160, witness *transaction.Witness) error
 	HeaderHeight() uint32
 	GetBlock(hash util.Uint256) (*block.Block, error)
 	GetCommittee() (keys.PublicKeys, error)
@@ -48,7 +51,7 @@ type Blockchainer interface {
 	GetStateRoot(height uint32) (*state.MPTRootState, error)
 	GetStorageItem(id int32, key []byte) *state.StorageItem
 	GetStorageItems(id int32) (map[string]*state.StorageItem, error)
-	GetTestVM(tx *transaction.Transaction) *vm.VM
+	GetTestVM(tx *transaction.Transaction, trig trigger.Type) (*dao.Cached, *vm.VM)
 	GetTransaction(util.Uint256) (*transaction.Transaction, uint32, error)
 	mempool.Feer // fee interface
 	GetMaxBlockSize() uint32
