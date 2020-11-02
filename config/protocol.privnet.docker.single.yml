@@ -15,6 +15,7 @@ ProtocolConfiguration:
     RegisterTransaction: 10000
   VerifyBlocks: true
   VerifyTransactions: true
+  EnableStateRoot: true
 
 ApplicationConfiguration:
   # LogPath could be set up in case you need stdout logs to some proper file.

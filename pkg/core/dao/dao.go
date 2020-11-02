@@ -504,7 +504,7 @@ func (dao *Simple) PutAppExecResult(aer *state.AppExecResult) error {
 
 func makeStateRootKey(height uint32) []byte {
 	key := make([]byte, 5)
-	key[0] = byte(storage.DataMPTHeight)
+	key[0] = byte(storage.DataMPT)
 	binary.LittleEndian.PutUint32(key[1:], height)
 	return key
 }
@@ -539,6 +539,7 @@ func (dao *Simple) GetCurrentStateRootHeight() (uint32, error) {
 
 // PutCurrentStateRootHeight updates current state root height.
 func (dao *Simple) PutCurrentStateRootHeight(height uint32) error {
+	fmt.Println("PUT STATE ROOT HEIGHT", height)
 	key := []byte{byte(storage.DataMPTHeight)}
 	val := make([]byte, 4)
 	binary.LittleEndian.PutUint32(val, height)
