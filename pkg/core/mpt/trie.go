@@ -17,6 +17,7 @@ type Trie struct {
 
 	gcEnabled bool
 
+	nodes   map[util.Uint256][]byte
 	updated map[util.Uint256]int
 	root    Node
 }
@@ -37,6 +38,7 @@ func NewTrie(root Node, enableGC bool, store *storage.MemCachedStore) *Trie {
 		root:  root,
 
 		gcEnabled: enableGC,
+		nodes:     make(map[util.Uint256][]byte),
 		updated:   make(map[util.Uint256]int),
 	}
 }
@@ -115,15 +117,15 @@ func (t *Trie) Put(key, value []byte) error {
 func (t *Trie) putIntoLeaf(curr *LeafNode, path []byte, val Node) (Node, error) {
 	v := val.(*LeafNode)
 	if len(path) == 0 {
-		t.removeRef(curr.Hash())
-		t.addRef(val.Hash())
+		t.removeRef(curr.Hash(), curr.bytes)
+		t.addRef(val.Hash(), val.Bytes())
 		return v, nil
 	}
 
 	b := NewBranchNode()
 	b.Children[path[0]] = t.newSubTrie(path[1:], v, true)
 	b.Children[lastChild] = curr
-	t.addRef(b.Hash())
+	t.addRef(b.Hash(), b.bytes)
 	return b, nil
 }
 
@@ -131,21 +133,21 @@ func (t *Trie) putIntoLeaf(curr *LeafNode, path []byte, val Node) (Node, error) 
 // It returns Node if curr needs to be replaced and error if any.
 func (t *Trie) putIntoBranch(curr *BranchNode, path []byte, val Node) (Node, error) {
 	i, path := splitPath(path)
-	t.removeRef(curr.Hash())
+	t.removeRef(curr.Hash(), curr.bytes)
 	r, err := t.putIntoNode(curr.Children[i], path, val)
 	if err != nil {
 		return nil, err
 	}
 	curr.Children[i] = r
 	curr.invalidateCache()
-	t.addRef(curr.Hash())
+	t.addRef(curr.Hash(), curr.bytes)
 	return curr, nil
 }
 
 // putIntoExtension puts val to trie if current node is an Extension.
 // It returns Node if curr needs to be replaced and error if any.
 func (t *Trie) putIntoExtension(curr *ExtensionNode, path []byte, val Node) (Node, error) {
-	t.removeRef(curr.Hash())
+	t.removeRef(curr.Hash(), curr.bytes)
 	if bytes.HasPrefix(path, curr.key) {
 		r, err := t.putIntoNode(curr.next, path[len(curr.key):], val)
 		if err != nil {
@@ -153,7 +155,7 @@ func (t *Trie) putIntoExtension(curr *ExtensionNode, path []byte, val Node) (Nod
 		}
 		curr.next = r
 		curr.invalidateCache()
-		t.addRef(curr.Hash())
+		t.addRef(curr.Hash(), curr.bytes)
 		return curr, nil
 	}
 
@@ -170,10 +172,10 @@ func (t *Trie) putIntoExtension(curr *ExtensionNode, path []byte, val Node) (Nod
 	s2 := t.newSubTrie(pathTail, val, true)
 	b.Children[i] = s2
 
-	t.addRef(b.Hash())
+	t.addRef(b.Hash(), b.bytes)
 	if lp > 0 {
 		e := NewExtensionNode(copySlice(pref), b)
-		t.addRef(e.Hash())
+		t.addRef(e.Hash(), e.bytes)
 		return e, nil
 	}
 	return b, nil
@@ -197,13 +199,13 @@ func (t *Trie) putIntoHash(curr *HashNode, path []byte, val Node) (Node, error) 
 // newSubTrie create new trie containing node at provided path.
 func (t *Trie) newSubTrie(path []byte, val Node, newVal bool) Node {
 	if newVal {
-		t.addRef(val.Hash())
+		t.addRef(val.Hash(), val.Bytes())
 	}
 	if len(path) == 0 {
 		return val
 	}
 	e := NewExtensionNode(path, val)
-	t.addRef(e.Hash())
+	t.addRef(e.Hash(), e.bytes)
 	return e
 }
 
@@ -239,11 +241,12 @@ func (t *Trie) Delete(key []byte) error {
 func (t *Trie) deleteFromBranch(b *BranchNode, path []byte) (Node, error) {
 	i, path := splitPath(path)
 	h := b.Hash()
+	bs := b.bytes
 	r, err := t.deleteFromNode(b.Children[i], path)
 	if err != nil {
 		return nil, err
 	}
-	t.removeRef(h)
+	t.removeRef(h, bs)
 	b.Children[i] = r
 	b.invalidateCache()
 	var count, index int
@@ -256,7 +259,7 @@ func (t *Trie) deleteFromBranch(b *BranchNode, path []byte) (Node, error) {
 	}
 	// count is >= 1 because branch node had at least 2 children before deletion.
 	if count > 1 {
-		t.addRef(b.Hash())
+		t.addRef(b.Hash(), b.bytes)
 		return b, nil
 	}
 	c := b.Children[index]
@@ -270,15 +273,15 @@ func (t *Trie) deleteFromBranch(b *BranchNode, path []byte) (Node, error) {
 		}
 	}
 	if e, ok := c.(*ExtensionNode); ok {
-		t.removeRef(e.Hash())
+		t.removeRef(e.Hash(), e.bytes)
 		e.key = append([]byte{byte(index)}, e.key...)
 		e.invalidateCache()
-		t.addRef(e.Hash())
+		t.addRef(e.Hash(), e.bytes)
 		return e, nil
 	}
 
 	e := NewExtensionNode([]byte{byte(index)}, c)
-	t.addRef(e.Hash())
+	t.addRef(e.Hash(), e.bytes)
 	return e, nil
 }
 
@@ -287,14 +290,15 @@ func (t *Trie) deleteFromExtension(n *ExtensionNode, path []byte) (Node, error) 
 		return nil, ErrNotFound
 	}
 	h := n.Hash()
+	bs := n.bytes
 	r, err := t.deleteFromNode(n.next, path[len(n.key):])
 	if err != nil {
 		return nil, err
 	}
-	t.removeRef(h)
+	t.removeRef(h, bs)
 	switch nxt := r.(type) {
 	case *ExtensionNode:
-		t.removeRef(nxt.Hash())
+		t.removeRef(nxt.Hash(), nxt.bytes)
 		n.key = append(n.key, nxt.key...)
 		n.next = nxt.next
 	case *HashNode:
@@ -305,7 +309,7 @@ func (t *Trie) deleteFromExtension(n *ExtensionNode, path []byte) (Node, error) 
 		n.next = r
 	}
 	n.invalidateCache()
-	t.addRef(n.Hash())
+	t.addRef(n.Hash(), n.bytes)
 	return n, nil
 }
 
@@ -315,7 +319,7 @@ func (t *Trie) deleteFromNode(curr Node, path []byte) (Node, error) {
 	switch n := curr.(type) {
 	case *LeafNode:
 		if len(path) == 0 {
-			t.removeRef(curr.Hash())
+			t.removeRef(curr.Hash(), curr.Bytes())
 			return new(HashNode), nil
 		}
 		return nil, ErrNotFound
@@ -354,89 +358,34 @@ func makeStorageKey(mptKey []byte) []byte {
 // new node to storage. Normally, flush should be called with every StateRoot persist, i.e.
 // after every block.
 func (t *Trie) Flush() {
-	flushed := make(map[util.Uint256]struct{})
-	w := io.NewBufBinWriter()
-	t.flush(t.root, w, flushed)
-	if t.gcEnabled {
-		// Process removed nodes if reference counting is enabled.
-		for h, cnt := range t.updated {
-			switch {
-			case cnt > 0:
-				// BUG: node has references but is not in trie.
-				// FIXME remove after debugging
-				panic(fmt.Sprintf("not all items were processed: %s cnt %d", h.StringBE(), cnt))
-			case cnt == 0:
-			default:
-				t.updateRefCount(h, nil, w)
+	for h, cnt := range t.updated {
+		if cnt != 0 {
+			node := t.nodes[h]
+			if node == nil {
+				panic("item not in trie")
+			}
+			if t.gcEnabled {
+				t.updateRefCount(h, cnt, node)
+			} else if cnt > 0 {
+				_ = t.Store.Put(makeStorageKey(h.BytesBE()), node)
 			}
 		}
-		t.updated = make(map[util.Uint256]int)
 	}
+	t.updated = make(map[util.Uint256]int)
+	t.nodes = make(map[util.Uint256][]byte)
+	t.updated = make(map[util.Uint256]int)
 }
 
-func (t *Trie) flush(node Node, w *io.BufBinWriter, flushed map[util.Uint256]struct{}) {
-	if node.IsFlushed() {
-		return
-	}
-	switch n := node.(type) {
-	case *BranchNode:
-		for i := range n.Children {
-			t.flush(n.Children[i], w, flushed)
-		}
-	case *ExtensionNode:
-		t.flush(n.next, w, flushed)
-	case *HashNode:
-		return
-	}
-	t.putToStoreWithBuf(node, w, flushed)
-}
-
-func (t *Trie) putToStoreWithBuf(n Node, w *io.BufBinWriter, flushed map[util.Uint256]struct{}) {
-	if n.Type() == HashT {
-		panic("can't put hash node in trie")
-	}
-	// n.SetFlushed() saves info about flushed nodes between consecutive flushes.
-	// flushed map contains nodes which were flushed during current invocation
-	// so here we mark node as flushed and perform real flush only if it wasn't done before.
-	n.SetFlushed()
-	if _, ok := flushed[n.Hash()]; ok {
-		return
-	}
-	if upd := t.updated[n.Hash()]; upd != 0 {
-		if !t.gcEnabled {
-			if upd > 0 {
-				_ = t.Store.Put(makeStorageKey(n.Hash().BytesBE()), n.Bytes())
-			}
-		} else {
-			t.updateRefCount(n.Hash(), n, w)
-		}
-	}
-	delete(t.updated, n.Hash())
-	flushed[n.Hash()] = struct{}{}
-}
-
-// updateRefCount should be called only when gc is enabled.
-func (t *Trie) updateRefCount(h util.Uint256, n Node, w *io.BufBinWriter) {
-	if !t.gcEnabled {
-		panic("`updateRefCount` is called, but GC is disabled")
-	}
+func (t *Trie) updateRefCount(h util.Uint256, upd int, node []byte) {
 	var cnt int
 	key := makeStorageKey(h.BytesBE())
 	data, err := t.Store.Get(key)
 	if err == nil {
 		cnt = int(binary.LittleEndian.Uint32(data[len(data)-4:]))
 	} else {
-		if n == nil {
-			// BUG: item must me in store.
-			// FIXME remove after debugging
-			panic(fmt.Sprintf("item is not in store in `updateRefCount`: %s", h.StringBE()))
-		}
-		w.Reset()
-		no := extendedNodeObject{NodeObject: NodeObject{Node: n}}
-		no.EncodeBinary(w.BinWriter)
-		data = w.Bytes()
+		data = append(node, 0, 0, 0, 0)
 	}
-	cnt += t.updated[h]
+	cnt += upd
 	switch {
 	case cnt < 0:
 		// BUG: negative reference count
@@ -450,12 +399,14 @@ func (t *Trie) updateRefCount(h util.Uint256, n Node, w *io.BufBinWriter) {
 	}
 }
 
-func (t *Trie) addRef(h util.Uint256) {
+func (t *Trie) addRef(h util.Uint256, bs []byte) {
 	t.updated[h]++
+	t.nodes[h] = bs
 }
 
-func (t *Trie) removeRef(h util.Uint256) {
+func (t *Trie) removeRef(h util.Uint256, bs []byte) {
 	t.updated[h]--
+	t.nodes[h] = bs
 }
 
 func (t *Trie) getFromStore(h util.Uint256) (Node, error) {

@@ -5,8 +5,6 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/internal/random"
-	"github.com/nspcc-dev/neo-go/pkg/io"
-	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -167,8 +165,14 @@ func TestTrie_BigPut(t *testing.T) {
 }
 
 func (tr *Trie) putToStore(n Node) {
-	tr.updated[n.Hash()] = 1
-	tr.putToStoreWithBuf(n, io.NewBufBinWriter(), make(map[util.Uint256]struct{}))
+	if n.Type() == HashT {
+		panic("can't put hash node in trie")
+	}
+	if tr.gcEnabled {
+		tr.updateRefCount(n.Hash(), 1, n.Bytes())
+	} else {
+		_ = tr.Store.Put(makeStorageKey(n.Hash().BytesBE()), n.Bytes())
+	}
 }
 
 func (tr *Trie) testHas(t *testing.T, key, value []byte) {
