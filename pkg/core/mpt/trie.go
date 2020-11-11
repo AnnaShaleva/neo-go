@@ -18,6 +18,7 @@ type Trie struct {
 	gcEnabled bool
 
 	nodes   map[util.Uint256][]byte
+	initial map[util.Uint256]int
 	updated map[util.Uint256]int
 	root    Node
 }
@@ -40,6 +41,7 @@ func NewTrie(root Node, enableGC bool, store *storage.MemCachedStore) *Trie {
 		gcEnabled: enableGC,
 		nodes:     make(map[util.Uint256][]byte),
 		updated:   make(map[util.Uint256]int),
+		initial:   make(map[util.Uint256]int),
 	}
 }
 
@@ -373,16 +375,24 @@ func (t *Trie) Flush() {
 	}
 	t.updated = make(map[util.Uint256]int)
 	t.nodes = make(map[util.Uint256][]byte)
+	t.initial = make(map[util.Uint256]int)
 	t.updated = make(map[util.Uint256]int)
 }
 
 func (t *Trie) updateRefCount(h util.Uint256, upd int, node []byte) {
+	var data []byte
 	var cnt int
 	key := makeStorageKey(h.BytesBE())
-	data, err := t.Store.Get(key)
-	if err == nil {
-		cnt = int(binary.LittleEndian.Uint32(data[len(data)-4:]))
-	} else {
+	cnt, ok := t.initial[h]
+	if !ok {
+		// A newly created item which may be in store.
+		var err error
+		data, err = t.Store.Get(key)
+		if err == nil {
+			cnt = int(binary.LittleEndian.Uint32(data[len(data)-4:]))
+		}
+	}
+	if len(data) == 0 {
 		data = append(node, 0, 0, 0, 0)
 	}
 	cnt += upd
@@ -429,6 +439,8 @@ func (t *Trie) getFromStore(h util.Uint256) (Node, error) {
 
 	if t.gcEnabled {
 		data = data[:len(data)-4]
+		t.nodes[h] = data
+		t.initial[h] = int(n.(*extendedNodeObject).RefCount)
 	}
 	n.getNode().(flushedNode).setCache(data, h)
 	return n.getNode(), nil
