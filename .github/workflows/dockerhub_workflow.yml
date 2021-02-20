@@ -1,0 +1,35 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Push released image to DockerHub
+
+# Controls when the action will run.
+on:
+  push:
+    # Publish `$default-branch` as Docker `latest` image.
+    branches:
+      - $default-branch
+  release:
+    # Publish released commit as Docker image.
+    types:
+      - published
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+env:
+  # Docker image's name.
+  IMAGE_NAME: neo-go
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  test:
+    name: Run tests before publishing
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Run tests
+        run: make test
+#  publish:
+#    name: Publish to DockerHub
+#    runs-on: ubuntu-latest # ubuntu-18.04
