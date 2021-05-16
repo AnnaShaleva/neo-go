@@ -7,6 +7,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net"
+	"path"
 	"strconv"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/blockchainer"
 	"github.com/nspcc-dev/neo-go/pkg/core/mempool"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
+	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/network/capability"
 	"github.com/nspcc-dev/neo-go/pkg/network/extpool"
 	"github.com/nspcc-dev/neo-go/pkg/network/payload"
@@ -26,6 +28,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -91,7 +94,8 @@ type (
 		oracle    *oracle.Oracle
 		stateRoot stateroot.Service
 
-		log *zap.Logger
+		log       *zap.Logger
+		blocksLog *zap.Logger
 	}
 
 	peerDrop struct {
@@ -121,6 +125,7 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 	if log == nil {
 		return nil, errors.New("logger is a required parameter")
 	}
+	blocksLog, err := buildBlocksLog(config.BlocksLogPath, config.Port)
 
 	s := &Server{
 		ServerConfig:      config,
@@ -136,6 +141,7 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 		canHandleExtens:   atomic.NewBool(false),
 		extensiblePool:    extpool.New(chain),
 		log:               log,
+		blocksLog:         blocksLog,
 		transactions:      make(chan *transaction.Transaction, 64),
 	}
 	if chain.P2PSigExtensionsEnabled() {
@@ -207,6 +213,7 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 
 	srv, err := newConsensus(consensus.Config{
 		Logger:                log,
+		BlocksLogger:          blocksLog,
 		Broadcast:             s.handleNewPayload,
 		Chain:                 chain,
 		ProtocolConfiguration: chain.GetConfig(),
@@ -254,6 +261,31 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 	)
 
 	return s, nil
+}
+
+func buildBlocksLog(logPath string, nodePort uint16) (*zap.Logger, error) {
+	level := zapcore.InfoLevel
+
+	cc := zap.NewProductionConfig()
+	cc.DisableCaller = true
+	cc.DisableStacktrace = true
+	cc.EncoderConfig.EncodeDuration = zapcore.StringDurationEncoder
+	cc.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+	cc.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	cc.Encoding = "console"
+	cc.Level = zap.NewAtomicLevelAt(level)
+	cc.Sampling = nil
+
+	if logPath != "" {
+		logPath = path.Join(logPath, strconv.Itoa(int(nodePort)))
+		if err := io.MakeDirForFile(logPath, "blocks logger"); err != nil {
+			return nil, err
+		}
+
+		cc.OutputPaths = []string{logPath}
+	}
+
+	return cc.Build()
 }
 
 // ID returns the servers ID.
@@ -598,6 +630,12 @@ func (s *Server) handleVersionCmd(p Peer, version *payload.Version) error {
 
 // handleBlockCmd processes the received block received from its peer.
 func (s *Server) handleBlockCmd(p Peer, block *block.Block) error {
+	if _, err := s.chain.GetBlock(block.Hash()); err != nil {
+		s.blocksLog.Info("New block received via p2p",
+			zap.Int("index", int(block.Index)),
+			zap.Int("block_timestamp", int(block.Timestamp)),
+			zap.Int("time", int(time.Now().UnixNano())))
+	}
 	return s.bQueue.putBlock(block)
 }
 

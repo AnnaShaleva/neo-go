@@ -29,4 +29,5 @@ type ApplicationConfiguration struct {
 	Oracle            OracleConfiguration     `yaml:"Oracle"`
 	P2PNotary         P2PNotary               `yaml:"P2PNotary"`
 	StateRoot         StateRoot               `yaml:"StateRoot"`
+	BlocksLogPath     string                  `yaml:"BlocksLogPath"`
 }

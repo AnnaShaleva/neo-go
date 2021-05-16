@@ -61,6 +61,9 @@ type (
 		// Level of the internal logger.
 		LogLevel zapcore.Level
 
+		// BlocksLogPath is a path to store logs of new blocks receiving time.
+		BlocksLogPath string
+
 		// Wallet is a wallet configuration.
 		Wallet *config.Wallet
 
@@ -108,5 +111,6 @@ func NewServerConfig(cfg config.Config) ServerConfig {
 		OracleCfg:         appConfig.Oracle,
 		P2PNotaryCfg:      appConfig.P2PNotary,
 		StateRootCfg:      appConfig.StateRoot,
+		BlocksLogPath:     appConfig.BlocksLogPath,
 	}
 }

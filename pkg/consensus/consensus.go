@@ -60,7 +60,8 @@ type Service interface {
 type service struct {
 	Config
 
-	log *zap.Logger
+	log       *zap.Logger
+	blocksLog *zap.Logger
 	// txx is a fifo cache which stores miner transactions.
 	txx  *relayCache
 	dbft *dbft.DBFT
@@ -89,6 +90,8 @@ type service struct {
 type Config struct {
 	// Logger is a logger instance.
 	Logger *zap.Logger
+	// Logger is a logger instance for new blocks acceptance logging.
+	BlocksLogger *zap.Logger
 	// Broadcast is a callback which is called to notify server
 	// about new consensus payload to sent.
 	Broadcast func(p *npayload.Extensible)
@@ -118,9 +121,10 @@ func NewService(cfg Config) (Service, error) {
 	srv := &service{
 		Config: cfg,
 
-		log:      cfg.Logger,
-		txx:      newFIFOCache(cacheMaxCapacity),
-		messages: make(chan Payload, 100),
+		log:       cfg.Logger,
+		blocksLog: cfg.BlocksLogger,
+		txx:       newFIFOCache(cacheMaxCapacity),
+		messages:  make(chan Payload, 100),
 
 		transactions: make(chan *transaction.Transaction, 100),
 		blockEvents:  make(chan *coreb.Block, 1),
@@ -518,6 +522,13 @@ func (s *service) verifyRequest(p payload.ConsensusPayload) error {
 func (s *service) processBlock(b block.Block) {
 	bb := &b.(*neoBlock).Block
 	bb.Script = *(s.getBlockWitness(bb))
+
+	if _, err := s.Chain.GetBlock(bb.Hash()); err != nil {
+		s.blocksLog.Info("New block received via cns",
+			zap.Int("index", int(bb.Index)),
+			zap.Int("block_timestamp", int(bb.Timestamp)),
+			zap.Int("time", int(time.Now().UnixNano())))
+	}
 
 	if err := s.Chain.AddBlock(bb); err != nil {
 		// The block might already be added via the regular network

@@ -473,6 +473,7 @@ func newTestService(t *testing.T) *service {
 func newTestServiceWithChain(t *testing.T, bc *core.Blockchain) *service {
 	srv, err := NewService(Config{
 		Logger:                zaptest.NewLogger(t),
+		BlocksLogger:          zaptest.NewLogger(t),
 		Broadcast:             func(*npayload.Extensible) {},
 		Chain:                 bc,
 		ProtocolConfiguration: bc.GetConfig(),
