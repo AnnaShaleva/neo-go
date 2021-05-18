@@ -64,6 +64,8 @@ type (
 		// BlocksLogPath is a path to store logs of new blocks receiving time.
 		BlocksLogPath string
 
+		UtilisationLogPath string
+
 		// Wallet is a wallet configuration.
 		Wallet *config.Wallet
 
@@ -93,24 +95,25 @@ func NewServerConfig(cfg config.Config) ServerConfig {
 	}
 
 	return ServerConfig{
-		UserAgent:         cfg.GenerateUserAgent(),
-		Address:           appConfig.Address,
-		Port:              appConfig.NodePort,
-		Net:               protoConfig.Magic,
-		Relay:             appConfig.Relay,
-		Seeds:             protoConfig.SeedList,
-		DialTimeout:       appConfig.DialTimeout * time.Second,
-		ProtoTickInterval: appConfig.ProtoTickInterval * time.Second,
-		PingInterval:      appConfig.PingInterval * time.Second,
-		PingTimeout:       appConfig.PingTimeout * time.Second,
-		MaxPeers:          appConfig.MaxPeers,
-		AttemptConnPeers:  appConfig.AttemptConnPeers,
-		MinPeers:          appConfig.MinPeers,
-		Wallet:            wc,
-		TimePerBlock:      time.Duration(protoConfig.SecondsPerBlock) * time.Second,
-		OracleCfg:         appConfig.Oracle,
-		P2PNotaryCfg:      appConfig.P2PNotary,
-		StateRootCfg:      appConfig.StateRoot,
-		BlocksLogPath:     appConfig.BlocksLogPath,
+		UserAgent:          cfg.GenerateUserAgent(),
+		Address:            appConfig.Address,
+		Port:               appConfig.NodePort,
+		Net:                protoConfig.Magic,
+		Relay:              appConfig.Relay,
+		Seeds:              protoConfig.SeedList,
+		DialTimeout:        appConfig.DialTimeout * time.Second,
+		ProtoTickInterval:  appConfig.ProtoTickInterval * time.Second,
+		PingInterval:       appConfig.PingInterval * time.Second,
+		PingTimeout:        appConfig.PingTimeout * time.Second,
+		MaxPeers:           appConfig.MaxPeers,
+		AttemptConnPeers:   appConfig.AttemptConnPeers,
+		MinPeers:           appConfig.MinPeers,
+		Wallet:             wc,
+		TimePerBlock:       time.Duration(protoConfig.SecondsPerBlock) * time.Second,
+		OracleCfg:          appConfig.Oracle,
+		P2PNotaryCfg:       appConfig.P2PNotary,
+		StateRootCfg:       appConfig.StateRoot,
+		BlocksLogPath:      appConfig.BlocksLogPath,
+		UtilisationLogPath: appConfig.UtilisationLogPath,
 	}
 }

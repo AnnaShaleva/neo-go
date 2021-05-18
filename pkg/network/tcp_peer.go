@@ -66,17 +66,20 @@ type TCPPeer struct {
 	// number of sent pings.
 	pingSent  int
 	pingTimer *time.Timer
+
+	utilisationLog *zap.Logger
 }
 
 // NewTCPPeer returns a TCPPeer structure based on the given connection.
 func NewTCPPeer(conn net.Conn, s *Server) *TCPPeer {
 	return &TCPPeer{
-		conn:     conn,
-		server:   s,
-		done:     make(chan struct{}),
-		sendQ:    make(chan []byte, requestQueueSize),
-		p2pSendQ: make(chan []byte, p2pMsgQueueSize),
-		hpSendQ:  make(chan []byte, hpRequestQueueSize),
+		conn:           conn,
+		server:         s,
+		done:           make(chan struct{}),
+		sendQ:          make(chan []byte, requestQueueSize),
+		p2pSendQ:       make(chan []byte, p2pMsgQueueSize),
+		hpSendQ:        make(chan []byte, hpRequestQueueSize),
+		utilisationLog: s.utilisationLog,
 	}
 }
 
@@ -132,6 +135,16 @@ func (p *TCPPeer) EnqueueP2PPacket(msg []byte) error {
 
 // EnqueueP2PMessage implements the Peer interface.
 func (p *TCPPeer) EnqueueP2PMessage(msg *Message) error {
+	if t := msg.Command; t == CMDBlock || (t == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType) {
+		bytes, err := msg.Bytes()
+		if err != nil {
+			return err
+		}
+		p.utilisationLog.Info("send block-related message",
+			zap.String("type", t.String()),
+			zap.Int("size", len(bytes)),
+			zap.Int("time", int(time.Now().UnixNano())))
+	}
 	return p.putMsgIntoQueue(p.p2pSendQ, msg)
 }
 

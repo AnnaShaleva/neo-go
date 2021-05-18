@@ -94,8 +94,9 @@ type (
 		oracle    *oracle.Oracle
 		stateRoot stateroot.Service
 
-		log       *zap.Logger
-		blocksLog *zap.Logger
+		log            *zap.Logger
+		blocksLog      *zap.Logger
+		utilisationLog *zap.Logger
 	}
 
 	peerDrop struct {
@@ -125,7 +126,8 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 	if log == nil {
 		return nil, errors.New("logger is a required parameter")
 	}
-	blocksLog, err := buildBlocksLog(config.BlocksLogPath, config.Port)
+	blocksLog, err := buildBlocksLog(config.BlocksLogPath, config.Port, "blocks logger")
+	utilisationLog, err := buildBlocksLog(config.UtilisationLogPath, config.Port, "network utilisation logger")
 
 	s := &Server{
 		ServerConfig:      config,
@@ -142,6 +144,7 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 		extensiblePool:    extpool.New(chain),
 		log:               log,
 		blocksLog:         blocksLog,
+		utilisationLog:    utilisationLog,
 		transactions:      make(chan *transaction.Transaction, 64),
 	}
 	if chain.P2PSigExtensionsEnabled() {
@@ -263,7 +266,7 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 	return s, nil
 }
 
-func buildBlocksLog(logPath string, nodePort uint16) (*zap.Logger, error) {
+func buildBlocksLog(logPath string, nodePort uint16, creator string) (*zap.Logger, error) {
 	level := zapcore.InfoLevel
 
 	cc := zap.NewProductionConfig()
@@ -278,7 +281,7 @@ func buildBlocksLog(logPath string, nodePort uint16) (*zap.Logger, error) {
 
 	if logPath != "" {
 		logPath = path.Join(logPath, strconv.Itoa(int(nodePort)))
-		if err := io.MakeDirForFile(logPath, "blocks logger"); err != nil {
+		if err := io.MakeDirForFile(logPath, creator); err != nil {
 			return nil, err
 		}
 
@@ -758,6 +761,12 @@ func (s *Server) handleGetDataCmd(p Peer, inv *payload.Inventory) error {
 				if inv.Type == payload.ExtensibleType {
 					err = p.EnqueueHPPacket(true, pkt)
 				} else {
+					if inv.Type == payload.BlockType {
+						s.utilisationLog.Info("send block-related message",
+							zap.String("type", CMDBlock.String()),
+							zap.Int("size", len(pkt)),
+							zap.Int("time", int(time.Now().UnixNano())))
+					}
 					err = p.EnqueueP2PPacket(pkt)
 				}
 			}
@@ -818,6 +827,7 @@ func (s *Server) handleGetBlockByIndexCmd(p Peer, gbd *payload.GetBlockByIndex) 
 		if err = p.EnqueueP2PMessage(msg); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
@@ -1159,6 +1169,12 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 			continue
 		}
 		okCount++
+		if msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType {
+			s.utilisationLog.Info("send block-related message",
+				zap.String("type", CMDInv.String()),
+				zap.Int("size", len(pkt)),
+				zap.Int("time", int(time.Now().UnixNano())))
+		}
 		if err := send(peer, false, pkt); err != nil {
 			continue
 		}
