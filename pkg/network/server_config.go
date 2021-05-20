@@ -61,11 +61,6 @@ type (
 		// Level of the internal logger.
 		LogLevel zapcore.Level
 
-		// BlocksLogPath is a path to store logs of new blocks receiving time.
-		BlocksLogPath string
-
-		UtilisationLogPath string
-
 		// Wallet is a wallet configuration.
 		Wallet *config.Wallet
 
@@ -80,6 +75,12 @@ type (
 
 		// StateRootCfg is stateroot module configuration.
 		StateRootCfg config.StateRoot
+
+		// Extensions.
+		// BlocksLogPath is a path to store logs of new blocks receiving time.
+		BlocksLogPath      string
+		UtilisationLogPath string
+		SendBlockLatency   time.Duration
 	}
 )
 
@@ -115,5 +116,6 @@ func NewServerConfig(cfg config.Config) ServerConfig {
 		StateRootCfg:       appConfig.StateRoot,
 		BlocksLogPath:      appConfig.BlocksLogPath,
 		UtilisationLogPath: appConfig.UtilisationLogPath,
+		SendBlockLatency:   time.Millisecond * time.Duration(cfg.ApplicationConfiguration.SendBlockLatency),
 	}
 }

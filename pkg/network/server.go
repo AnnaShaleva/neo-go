@@ -766,6 +766,7 @@ func (s *Server) handleGetDataCmd(p Peer, inv *payload.Inventory) error {
 							zap.String("type", CMDBlock.String()),
 							zap.Int("size", len(pkt)),
 							zap.Int("time", int(time.Now().UnixNano())))
+						time.Sleep(s.SendBlockLatency)
 					}
 					err = p.EnqueueP2PPacket(pkt)
 				}
@@ -1163,6 +1164,9 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 	success := make(map[Peer]bool, len(peers))
 	okCount := 0
 	sentCount := 0
+	if msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType {
+		time.Sleep(s.SendBlockLatency)
+	}
 	for peer := range peers {
 		if peerOK != nil && !peerOK(peer) {
 			success[peer] = false

@@ -144,6 +144,7 @@ func (p *TCPPeer) EnqueueP2PMessage(msg *Message) error {
 			zap.String("type", t.String()),
 			zap.Int("size", len(bytes)),
 			zap.Int("time", int(time.Now().UnixNano())))
+		time.Sleep(p.server.SendBlockLatency)
 	}
 	return p.putMsgIntoQueue(p.p2pSendQ, msg)
 }
