@@ -1,6 +1,7 @@
 package network
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 
@@ -52,6 +53,12 @@ type DefaultDiscovery struct {
 
 // NewDefaultDiscovery returns a new DefaultDiscovery.
 func NewDefaultDiscovery(addrs []string, dt time.Duration, ts Transporter) *DefaultDiscovery {
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(addrs), func(i, j int) {
+		a := addrs[i]
+		addrs[i] = addrs[j]
+		addrs[j] = a
+	})
 	d := &DefaultDiscovery{
 		seeds:            addrs,
 		transport:        ts,
