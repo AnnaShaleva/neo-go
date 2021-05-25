@@ -31,6 +31,7 @@ type ApplicationConfiguration struct {
 	StateRoot         StateRoot               `yaml:"StateRoot"`
 
 	// Extensions
+	TTL                int    `yaml:"TTL"`
 	BlocksLogPath      string `yaml:"BlocksLogPath"`
 	UtilisationLogPath string `yaml:"UtilisationLogPath"`
 	SendBlockLatency   int    `yaml:"SendBlockLatency"`

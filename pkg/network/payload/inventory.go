@@ -46,11 +46,16 @@ type Inventory struct {
 	Type InventoryType
 
 	// A list of hashes.
-	Hashes []util.Uint256
+	Hashes []HashAndCounter
+}
+
+type HashAndCounter struct {
+	Hash    util.Uint256
+	Counter byte
 }
 
 // NewInventory return a pointer to an Inventory.
-func NewInventory(typ InventoryType, hashes []util.Uint256) *Inventory {
+func NewInventory(typ InventoryType, hashes []HashAndCounter) *Inventory {
 	return &Inventory{
 		Type:   typ,
 		Hashes: hashes,
@@ -67,4 +72,16 @@ func (p *Inventory) DecodeBinary(br *io.BinReader) {
 func (p *Inventory) EncodeBinary(bw *io.BinWriter) {
 	bw.WriteB(byte(p.Type))
 	bw.WriteArray(p.Hashes)
+}
+
+func (h *HashAndCounter) EncodeBinary(bw *io.BinWriter) {
+	bw.WriteB(h.Counter)
+	h.Hash.EncodeBinary(bw)
+}
+
+// DecodeBinary implements Serializable interface.
+func (h *HashAndCounter) DecodeBinary(br *io.BinReader) {
+	h.Counter = br.ReadB()
+	h.Hash = util.Uint256{}
+	h.Hash.DecodeBinary(br)
 }

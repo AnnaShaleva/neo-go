@@ -97,6 +97,9 @@ type (
 		log            *zap.Logger
 		blocksLog      *zap.Logger
 		utilisationLog *zap.Logger
+
+		ttlLock sync.RWMutex
+		ttl     map[util.Uint256]byte
 	}
 
 	peerDrop struct {
@@ -145,6 +148,7 @@ func newServerFromConstructors(config ServerConfig, chain blockchainer.Blockchai
 		log:               log,
 		blocksLog:         blocksLog,
 		utilisationLog:    utilisationLog,
+		ttl:               make(map[util.Uint256]byte),
 		transactions:      make(chan *transaction.Transaction, 64),
 	}
 	if chain.P2PSigExtensionsEnabled() {
@@ -685,7 +689,7 @@ func (s *Server) handlePong(p Peer, pong *payload.Ping) error {
 
 // handleInvCmd processes the received inventory.
 func (s *Server) handleInvCmd(p Peer, inv *payload.Inventory) error {
-	reqHashes := make([]util.Uint256, 0)
+	reqHashes := make([]payload.HashAndCounter, 0)
 	var typExists = map[payload.InventoryType]func(util.Uint256) bool{
 		payload.TXType:    s.chain.HasTransaction,
 		payload.BlockType: s.chain.HasBlock,
@@ -699,8 +703,14 @@ func (s *Server) handleInvCmd(p Peer, inv *payload.Inventory) error {
 	}
 	if exists := typExists[inv.Type]; exists != nil {
 		for _, hash := range inv.Hashes {
-			if !exists(hash) {
+			if !exists(hash.Hash) {
 				reqHashes = append(reqHashes, hash)
+				s.ttlLock.Lock()
+				old := s.ttl[hash.Hash]
+				if old < hash.Counter+1 {
+					s.ttl[hash.Hash] = hash.Counter + 1
+				}
+				s.ttlLock.Unlock()
 			}
 		}
 	}
@@ -721,9 +731,9 @@ func (s *Server) handleInvCmd(p Peer, inv *payload.Inventory) error {
 // handleMempoolCmd handles getmempool command.
 func (s *Server) handleMempoolCmd(p Peer) error {
 	txs := s.chain.GetMemPool().GetVerifiedTransactions()
-	hs := make([]util.Uint256, 0, payload.MaxHashesCount)
+	hs := make([]payload.HashAndCounter, 0, payload.MaxHashesCount)
 	for i := range txs {
-		hs = append(hs, txs[i].Hash())
+		hs = append(hs, payload.HashAndCounter{Hash: txs[i].Hash(), Counter: 0})
 		if len(hs) < payload.MaxHashesCount && i != len(txs)-1 {
 			continue
 		}
@@ -739,34 +749,34 @@ func (s *Server) handleMempoolCmd(p Peer) error {
 
 // handleInvCmd processes the received inventory.
 func (s *Server) handleGetDataCmd(p Peer, inv *payload.Inventory) error {
-	var notFound []util.Uint256
+	var notFound []payload.HashAndCounter
 	for _, hash := range inv.Hashes {
 		var msg *Message
 
 		switch inv.Type {
 		case payload.TXType:
-			tx, _, err := s.chain.GetTransaction(hash)
+			tx, _, err := s.chain.GetTransaction(hash.Hash)
 			if err == nil {
 				msg = NewMessage(CMDTX, tx)
 			} else {
-				notFound = append(notFound, hash)
+				notFound = append(notFound, payload.HashAndCounter{Hash: hash.Hash, Counter: 0})
 			}
 		case payload.BlockType:
-			b, err := s.chain.GetBlock(hash)
+			b, err := s.chain.GetBlock(hash.Hash)
 			if err == nil {
 				msg = NewMessage(CMDBlock, b)
 			} else {
-				notFound = append(notFound, hash)
+				notFound = append(notFound, payload.HashAndCounter{Hash: hash.Hash, Counter: 0})
 			}
 		case payload.ExtensibleType:
-			if cp := s.extensiblePool.Get(hash); cp != nil {
+			if cp := s.extensiblePool.Get(hash.Hash); cp != nil {
 				msg = NewMessage(CMDExtensible, cp)
 			}
 		case payload.P2PNotaryRequestType:
-			if nrp, ok := s.notaryRequestPool.TryGetData(hash); ok { // already have checked P2PSigExtEnabled
+			if nrp, ok := s.notaryRequestPool.TryGetData(hash.Hash); ok { // already have checked P2PSigExtEnabled
 				msg = NewMessage(CMDP2PNotaryRequest, nrp.(*payload.P2PNotaryRequest))
 			} else {
-				notFound = append(notFound, hash)
+				notFound = append(notFound, payload.HashAndCounter{Hash: hash.Hash, Counter: 0})
 			}
 		}
 		if msg != nil {
@@ -806,13 +816,17 @@ func (s *Server) handleGetBlocksCmd(p Peer, gb *payload.GetBlocks) error {
 	if err != nil {
 		return err
 	}
-	blockHashes := make([]util.Uint256, 0)
+	blockHashes := make([]payload.HashAndCounter, 0)
 	for i := start.Index + 1; i <= start.Index+uint32(count); i++ {
 		hash := s.chain.GetHeaderHash(int(i))
 		if hash.Equals(util.Uint256{}) {
 			break
 		}
-		blockHashes = append(blockHashes, hash)
+		s.ttlLock.RLock()
+		counter := s.ttl[hash]
+		s.ttlLock.RUnlock()
+
+		blockHashes = append(blockHashes, payload.HashAndCounter{Hash: hash, Counter: counter})
 	}
 
 	if len(blockHashes) == 0 {
@@ -903,7 +917,7 @@ func (s *Server) handleExtensibleCmd(e *payload.Extensible) error {
 		return errors.New("invalid category")
 	}
 
-	msg := NewMessage(CMDInv, payload.NewInventory(payload.ExtensibleType, []util.Uint256{e.Hash()}))
+	msg := NewMessage(CMDInv, payload.NewInventory(payload.ExtensibleType, []payload.HashAndCounter{{Hash: e.Hash()}}))
 	if e.Category == consensus.Category {
 		s.broadcastHPMessage(msg)
 	} else {
@@ -970,7 +984,7 @@ func verifyNotaryRequest(bc blockchainer.Blockchainer, _ *transaction.Transactio
 
 func (s *Server) broadcastP2PNotaryRequestPayload(_ *transaction.Transaction, data interface{}) {
 	r := data.(*payload.P2PNotaryRequest) // we can guarantee that cast is successful
-	msg := NewMessage(CMDInv, payload.NewInventory(payload.P2PNotaryRequestType, []util.Uint256{r.FallbackTransaction.Hash()}))
+	msg := NewMessage(CMDInv, payload.NewInventory(payload.P2PNotaryRequestType, []payload.HashAndCounter{{Hash: r.FallbackTransaction.Hash()}}))
 	s.broadcastMessage(msg)
 }
 
@@ -1129,7 +1143,7 @@ func (s *Server) handleNewPayload(p *payload.Extensible) {
 		return
 	}
 
-	msg := NewMessage(CMDInv, payload.NewInventory(payload.ExtensibleType, []util.Uint256{p.Hash()}))
+	msg := NewMessage(CMDInv, payload.NewInventory(payload.ExtensibleType, []payload.HashAndCounter{{Hash: p.Hash()}}))
 	switch p.Category {
 	case consensus.Category:
 		// It's high priority because it directly affects consensus process,
@@ -1154,7 +1168,11 @@ func (s *Server) requestTx(hashes ...util.Uint256) {
 		if start == stop {
 			break
 		}
-		msg := NewMessage(CMDGetData, payload.NewInventory(payload.TXType, hashes[start:stop]))
+		r := make([]payload.HashAndCounter, stop-start)
+		for i, h := range hashes[start:stop] {
+			r[i] = payload.HashAndCounter{Hash: h}
+		}
+		msg := NewMessage(CMDGetData, payload.NewInventory(payload.TXType, r))
 		// It's high priority because it directly affects consensus process,
 		// even though it's getdata.
 		s.broadcastHPMessage(msg)
@@ -1254,12 +1272,18 @@ func (s *Server) relayBlocksLoop() {
 			s.chain.UnsubscribeFromBlocks(ch)
 			return
 		case b := <-ch:
-			msg := NewMessage(CMDInv, payload.NewInventory(payload.BlockType, []util.Uint256{b.Hash()}))
-			// Filter out nodes that are more current (avoid spamming the network
-			// during initial sync).
-			s.iteratePeersWithSendMsg(msg, Peer.EnqueuePacket, func(p Peer) bool {
-				return p.Handshaked() && p.LastBlockIndex() < b.Index
-			})
+			s.ttlLock.RLock()
+			counter := s.ttl[b.Hash()]
+			s.ttlLock.RUnlock()
+
+			if int(counter) < s.ServerConfig.TTL {
+				msg := NewMessage(CMDInv, payload.NewInventory(payload.BlockType, []payload.HashAndCounter{{Hash: b.Hash(), Counter: counter}}))
+				// Filter out nodes that are more current (avoid spamming the network
+				// during initial sync).
+				s.iteratePeersWithSendMsg(msg, Peer.EnqueuePacket, func(p Peer) bool {
+					return p.Handshaked() && p.LastBlockIndex() < b.Index
+				})
+			}
 			s.extensiblePool.RemoveStale(b.Index)
 			err := s.blocksLog.Sync()
 			if err != nil {
@@ -1297,7 +1321,11 @@ func (s *Server) broadcastTX(t *transaction.Transaction, _ interface{}) {
 }
 
 func (s *Server) broadcastTxHashes(hs []util.Uint256) {
-	msg := NewMessage(CMDInv, payload.NewInventory(payload.TXType, hs))
+	r := make([]payload.HashAndCounter, len(hs))
+	for i, h := range hs {
+		r[i] = payload.HashAndCounter{Hash: h, Counter: 0}
+	}
+	msg := NewMessage(CMDInv, payload.NewInventory(payload.TXType, r))
 
 	// We need to filter out non-relaying nodes, so plain broadcast
 	// functions don't fit here.
