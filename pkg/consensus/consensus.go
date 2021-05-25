@@ -523,12 +523,10 @@ func (s *service) processBlock(b block.Block) {
 	bb := &b.(*neoBlock).Block
 	bb.Script = *(s.getBlockWitness(bb))
 
-	if _, err := s.Chain.GetBlock(bb.Hash()); err != nil {
-		s.blocksLog.Info("New block received via cns",
-			zap.Int("index", int(bb.Index)),
-			zap.Int("block_timestamp", int(bb.Timestamp)),
-			zap.Int("time", int(time.Now().UnixNano())))
-	}
+	s.blocksLog.Info("New block received via cns",
+		zap.Int("index", int(bb.Index)),
+		zap.Int("block_timestamp", int(bb.Timestamp)),
+		zap.Int("time", int(time.Now().UnixNano())))
 
 	if err := s.Chain.AddBlock(bb); err != nil {
 		// The block might already be added via the regular network
