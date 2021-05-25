@@ -633,12 +633,10 @@ func (s *Server) handleVersionCmd(p Peer, version *payload.Version) error {
 
 // handleBlockCmd processes the received block received from its peer.
 func (s *Server) handleBlockCmd(p Peer, block *block.Block) error {
-	if _, err := s.chain.GetBlock(block.Hash()); err != nil {
-		s.blocksLog.Info("New block received via p2p",
-			zap.Int("index", int(block.Index)),
-			zap.Int("block_timestamp", int(block.Timestamp)),
-			zap.Int("time", int(time.Now().UnixNano())))
-	}
+	s.blocksLog.Info("New block received via p2p",
+		zap.Int("index", int(block.Index)),
+		zap.Int("block_timestamp", int(block.Timestamp)),
+		zap.Int("time", int(time.Now().UnixNano())))
 	return s.bQueue.putBlock(block)
 }
 
@@ -1251,6 +1249,14 @@ func (s *Server) relayBlocksLoop() {
 				return p.Handshaked() && p.LastBlockIndex() < b.Index
 			})
 			s.extensiblePool.RemoveStale(b.Index)
+			err := s.blocksLog.Sync()
+			if err != nil {
+				s.blocksLog.Error(err.Error())
+			}
+			err = s.utilisationLog.Sync()
+			if err != nil {
+				s.utilisationLog.Error(err.Error())
+			}
 		}
 	}
 }
