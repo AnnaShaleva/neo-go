@@ -1190,9 +1190,9 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 	}
 
 	// Send to at least 2/3 of good peers.
-	if 3*sentCount >= 2*okCount {
-		return
-	}
+	// if 3*sentCount >= 2*okCount {
+	//	return
+	//}
 
 	// Perform blocking send now.
 	for peer := range peers {
@@ -1206,9 +1206,9 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 			peer.AddGetAddrSent()
 		}
 		sentCount++
-		if 3*sentCount >= 2*okCount {
-			return
-		}
+		//if 3*sentCount >= 2*okCount {
+		//	return
+		//}
 	}
 }
 
