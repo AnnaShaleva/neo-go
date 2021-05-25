@@ -1197,6 +1197,10 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 	okCount := 0
 	sentCount := 0
 	isBlock := msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType
+	isConsensus := s.ServerConfig.Port == 20333 ||
+		s.ServerConfig.Port == 20334 ||
+		s.ServerConfig.Port == 20335 ||
+		s.ServerConfig.Port == 20336
 	if isBlock {
 		time.Sleep(s.SendBlockLatency)
 		mrand.Seed(time.Now().UnixNano())
@@ -1231,6 +1235,10 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 		if isBlock && sentCount >= s.Fout {
 			return
 		}
+
+		if isBlock && isConsensus {
+			return
+		}
 	}
 
 	// Send to at least 2/3 of good peers.
@@ -1256,6 +1264,10 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 
 		// if it's a block, check whether fout was reached
 		if isBlock && sentCount >= s.Fout {
+			return
+		}
+
+		if isBlock && isConsensus {
 			return
 		}
 	}
