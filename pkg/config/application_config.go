@@ -34,4 +34,5 @@ type ApplicationConfiguration struct {
 	BlocksLogPath      string `yaml:"BlocksLogPath"`
 	UtilisationLogPath string `yaml:"UtilisationLogPath"`
 	SendBlockLatency   int    `yaml:"SendBlockLatency"`
+	Fout               int    `yaml:"Fout"`
 }

@@ -1187,6 +1187,11 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 		}
 		success[peer] = true
 		sentCount++
+
+		// if it's a block, check whether fout was reached
+		if msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType && sentCount >= s.Fout {
+			return
+		}
 	}
 
 	// Send to at least 2/3 of good peers.
@@ -1209,6 +1214,11 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 		//if 3*sentCount >= 2*okCount {
 		//	return
 		//}
+
+		// if it's a block, check whether fout was reached
+		if msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType && sentCount >= s.Fout {
+			return
+		}
 	}
 }
 

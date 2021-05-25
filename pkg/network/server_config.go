@@ -81,6 +81,7 @@ type (
 		BlocksLogPath      string
 		UtilisationLogPath string
 		SendBlockLatency   time.Duration
+		Fout               int
 	}
 )
 
@@ -117,5 +118,6 @@ func NewServerConfig(cfg config.Config) ServerConfig {
 		BlocksLogPath:      appConfig.BlocksLogPath,
 		UtilisationLogPath: appConfig.UtilisationLogPath,
 		SendBlockLatency:   time.Millisecond * time.Duration(cfg.ApplicationConfiguration.SendBlockLatency),
+		Fout:               appConfig.Fout,
 	}
 }
