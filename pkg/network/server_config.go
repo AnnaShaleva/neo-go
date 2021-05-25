@@ -77,6 +77,7 @@ type (
 		StateRootCfg config.StateRoot
 
 		// Extensions.
+		TTL int
 		// BlocksLogPath is a path to store logs of new blocks receiving time.
 		BlocksLogPath      string
 		UtilisationLogPath string
@@ -115,6 +116,7 @@ func NewServerConfig(cfg config.Config) ServerConfig {
 		OracleCfg:          appConfig.Oracle,
 		P2PNotaryCfg:       appConfig.P2PNotary,
 		StateRootCfg:       appConfig.StateRoot,
+		TTL:                appConfig.TTL,
 		BlocksLogPath:      appConfig.BlocksLogPath,
 		UtilisationLogPath: appConfig.UtilisationLogPath,
 		SendBlockLatency:   time.Millisecond * time.Duration(cfg.ApplicationConfiguration.SendBlockLatency),
