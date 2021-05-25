@@ -1164,7 +1164,12 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 	success := make(map[Peer]bool, len(peers))
 	okCount := 0
 	sentCount := 0
-	if msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType {
+	isBlockMessage := msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType
+	isConsensus := s.ServerConfig.Port == 20333 ||
+		s.ServerConfig.Port == 20334 ||
+		s.ServerConfig.Port == 20335 ||
+		s.ServerConfig.Port == 20336
+	if isBlockMessage {
 		time.Sleep(s.SendBlockLatency)
 	}
 	for peer := range peers {
@@ -1173,7 +1178,7 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 			continue
 		}
 		okCount++
-		if msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType {
+		if isBlockMessage {
 			s.utilisationLog.Info("send block-related message",
 				zap.String("type", CMDInv.String()),
 				zap.Int("size", len(pkt)),
@@ -1187,6 +1192,9 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 		}
 		success[peer] = true
 		sentCount++
+		if isBlockMessage && isConsensus {
+			return
+		}
 	}
 
 	// Send to at least 2/3 of good peers.
@@ -1206,6 +1214,9 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 			peer.AddGetAddrSent()
 		}
 		sentCount++
+		if isBlockMessage && isConsensus {
+			return
+		}
 		//if 3*sentCount >= 2*okCount {
 		//	return
 		//}
