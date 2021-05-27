@@ -495,6 +495,22 @@ func (s *Server) tryStartConsensus() {
 	}
 }
 
+// PeersArr returns the current list of peers connected to
+// the server.
+func (s *Server) PeersArr() []Peer {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	peers := make([]Peer, len(s.peers))
+	i := 0
+	for k := range s.peers {
+		peers[i] = k
+		i++
+	}
+
+	return peers
+}
+
 // Peers returns the current list of peers connected to
 // the server.
 func (s *Server) Peers() map[Peer]bool {
@@ -1150,7 +1166,7 @@ func (s *Server) requestTx(hashes ...util.Uint256) {
 // peer is considered invalid if it returns false).
 func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []byte) error, peerOK func(Peer) bool) {
 	// Get a copy of s.peers to avoid holding a lock while sending.
-	peers := s.Peers()
+	peers := s.PeersArr()
 	if len(peers) == 0 {
 		return
 	}
@@ -1162,21 +1178,27 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 	success := make(map[Peer]bool, len(peers))
 	okCount := 0
 	sentCount := 0
-	isBlockMessage := msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType
+	isBlock := msg.Command == CMDInv && msg.Payload.(*payload.Inventory).Type == payload.BlockType
 	isConsensus := s.ServerConfig.Port == 20333 ||
 		s.ServerConfig.Port == 20334 ||
 		s.ServerConfig.Port == 20335 ||
 		s.ServerConfig.Port == 20336
-	if isBlockMessage {
+	if isBlock {
 		time.Sleep(s.SendBlockLatency)
+		mrand.Seed(time.Now().UnixNano())
+		mrand.Shuffle(len(peers), func(i, j int) {
+			temp := peers[j]
+			peers[j] = peers[i]
+			peers[i] = temp
+		})
 	}
-	for peer := range peers {
+	for _, peer := range peers {
 		if peerOK != nil && !peerOK(peer) {
 			success[peer] = false
 			continue
 		}
 		okCount++
-		if isBlockMessage {
+		if isBlock {
 			s.utilisationLog.Info("send block-related message",
 				zap.String("type", CMDInv.String()),
 				zap.Int("size", len(pkt)),
@@ -1190,7 +1212,7 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 		}
 		success[peer] = true
 		sentCount++
-		if isBlockMessage && isConsensus {
+		if isBlock && isConsensus {
 			return
 		}
 	}
@@ -1201,7 +1223,7 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 	//}
 
 	// Perform blocking send now.
-	for peer := range peers {
+	for _, peer := range peers {
 		if _, ok := success[peer]; ok || peerOK != nil && !peerOK(peer) {
 			continue
 		}
@@ -1212,7 +1234,7 @@ func (s *Server) iteratePeersWithSendMsg(msg *Message, send func(Peer, bool, []b
 			peer.AddGetAddrSent()
 		}
 		sentCount++
-		if isBlockMessage && isConsensus {
+		if isBlock && isConsensus {
 			return
 		}
 		//if 3*sentCount >= 2*okCount {
