@@ -23,21 +23,33 @@ LABEL version=%VERSION%
 WORKDIR /
 
 COPY --from=builder /neo-go/config /config
-COPY --from=builder /neo-go/.docker/privnet-entrypoint.sh /usr/bin/privnet-entrypoint.sh
+COPY --from=builder /neo-go/.docker/privnet-entrypoint.ps1 /usr/bin/privnet-entrypoint.ps1
 COPY --from=builder /neo-go/bin/neo-go.exe /usr/bin/neo-go.exe
 # TODO: Windows Server doesn't have default crt, need to export certs from certmgr
 # (see https://stackoverflow.com/questions/26893521/ca-certificate-directory-on-windows).
 # COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-SHELL ["powershell", "-Command"]
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';", "$ProgressPreference = 'SilentlyContinue';"]
 
 # Check executable version.
 RUN /usr/bin/neo-go.exe --version
-
 RUN ls /
 RUN ls /usr/bin
 
-ENTRYPOINT /usr/bin/neo-go.exe node --config-path /config -t
+#RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+# 	Invoke-WebRequest -Uri https://github.com/git-for-windows/git/releases/download/v2.34.0.windows.1/MinGit-2.34.0-64-bit.zip -OutFile 'git.zip'; \
+# 	Expand-Archive -Path git.zip -DestinationPath C:\git\.; \
+# 	Remove-Item git.zip -Force; \
+# 	$env:PATH = 'C:\git\cmd;C:\git\mingw64\bin;C:\git\usr\bin;' + $env:PATH; \
+# 	[Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine); \
+# 	git version; \
+# 	ls C:\git; \
+# 	cp -r C:\git\bin\* /bin/
+
+ENTRYPOINT ["powershell", "-File", "/usr/bin/privnet-entrypoint.ps1"]
+
+#CMD ["powershell", "-Command", "/usr/bin/neo-go.exe", "node", "--config-path", "/config", "-t"]
+CMD ["node", "--config-path", "/config", "-t"]
 
 #ENTRYPOINT ["/usr/bin/privnet-entrypoint.sh"]
 
