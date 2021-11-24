@@ -29,9 +29,16 @@ COPY --from=builder /neo-go/bin/neo-go.exe /usr/bin/neo-go.exe
 # (see https://stackoverflow.com/questions/26893521/ca-certificate-directory-on-windows).
 # COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
+SHELL ["powershell", "-Command"]
+
 # Check executable version.
 RUN /usr/bin/neo-go.exe --version
 
-ENTRYPOINT ["/usr/bin/privnet-entrypoint.sh"]
+RUN ls /
+RUN ls /usr/bin
 
-CMD ["node", "--config-path", "/config", "--privnet"]
+ENTRYPOINT /usr/bin/neo-go.exe node --config-path /config -t
+
+#ENTRYPOINT ["/usr/bin/privnet-entrypoint.sh"]
+
+#CMD ["node", "--config-path", "/config", "--privnet"]

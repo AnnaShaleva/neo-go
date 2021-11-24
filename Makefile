@@ -52,9 +52,17 @@ image: deps
 	@echo "=> Building image"
 	@docker build -t $(IMAGE_REPO):$(VERSION) --build-arg REPO=$(REPO) --build-arg VERSION=$(VERSION) .
 
-image.win: deps
-	@echo "=> Building image"
+image.wsc: deps
+	@echo "=> Building image for Windows Server Core"
 	@docker build -f Dockerfile.win -t $(IMAGE_REPO):$(VERSION) --build-arg REPO=$(REPO) --build-arg VERSION=$(VERSION) .
+
+image.wsc_up:
+	@docker ps -a
+	@docker image ls
+	@echo "=> Starting container for WSC"
+	@docker run $(IMAGE_REPO):$(VERSION)
+	@docker ps -a
+	@echo "=> END"
 
 image-latest: deps
 	@echo "=> Building image with 'latest' tag"

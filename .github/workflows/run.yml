@@ -1,0 +1,36 @@
+name: Run docker-image
+
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize]
+    paths-ignore:
+      - 'scripts/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+env:
+  GO111MODULE: "on"
+
+jobs:
+  run_image_wsc:
+    name: Run Docker image (Windows Server Core)
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Build Docker image
+        run: make image.wsc
+
+      - name: Run node
+        run: make image.wsc_up
+
+      - name: Check containers
+        run: docker ps -a
+
+      - name: Check node log
+        run: PowerShell -Command "docker ps -a | echo"
