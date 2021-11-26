@@ -74,9 +74,10 @@ func newTestVMCLIWithLogo(t *testing.T, printLogo bool) *executor {
 	e.cli = NewWithConfig(printLogo,
 		func(int) { e.exit.Store(true) },
 		&readline.Config{
-			Prompt: "",
-			Stdin:  e.in,
-			Stdout: e.out,
+			Prompt:         "",
+			Stdin:          e.in,
+			Stdout:         e.out,
+			FuncIsTerminal: func() bool { return false },
 		})
 	return e
 }
