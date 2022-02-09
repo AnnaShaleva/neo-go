@@ -4,8 +4,8 @@ name: Push images to DockerHub
 on:
   push:
     # Publish `master` as Docker `latest` and `git_revision` images.
-    branches:
-      - master
+    #branches:
+    #  - master
   release:
     # Publish released commit as Docker `latest` and `git_revision` images.
     types:
@@ -128,7 +128,7 @@ jobs:
         run: make test
   publish_wsc:
     # Ensure test job passes before pushing image.
-    needs: tests_wsc
+    #needs: tests_wsc
     name: Publish WindowsServerCore-based image to DockerHub
     runs-on: windows-2022
     steps:
@@ -137,6 +137,32 @@ jobs:
           ref: ${{ github.event.inputs.ref }}
           # Allows to fetch all history for all branches and tags. Need this for proper versioning.
           fetch-depth: 0
+
+      - name: Looking for cached GoWSC-22 Docker image
+        uses: actions/cache@v2
+        id: cache-gowsc
+        env:
+          cache-name: cache-gowsc-image
+        with:
+          path: ../docker-cache
+          key: ${{ runner.os }}-build-${{ env.cache-name }}
+
+      - name: Show docker images
+        run: docker images
+
+      - name: Download GoWSC-22 Docker image
+        if: steps.cache-gowsc.outputs.cache-hit != 'true'
+        run: |
+          mkdir ../docker-cache
+          docker pull golang:windowsservercore-ltsc2022
+          docker save -o ../docker-cache/wsc.tar golang:windowsservercore-ltsc2022
+
+      - name: Restore GoWSC-22 Docker image from cache
+        if: steps.cache-gowsc.outputs.cache-hit == 'true'
+        run: docker load -i ../docker-cache/wsc.tar
+
+      - name: Show docker images after restore
+        run: docker images
 
       - name: Build image
         run: make image-wsc
