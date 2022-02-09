@@ -497,8 +497,8 @@ func (s *Server) testHandleGetData(t *testing.T, invType payload.InventoryType, 
 
 	s.testHandleMessage(t, p, CMDGetData, payload.NewInventory(invType, hs))
 
-	require.Eventually(t, func() bool { return recvResponse.Load() }, time.Second, time.Millisecond)
-	require.Eventually(t, func() bool { return recvNotFound.Load() }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return recvResponse.Load() }, 2*time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return recvNotFound.Load() }, 2*time.Second, time.Millisecond)
 }
 
 func TestGetData(t *testing.T) {
