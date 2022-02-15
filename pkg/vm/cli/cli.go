@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -712,4 +713,10 @@ func printLogo(c *ishell.Shell) {
 	c.Print(logo)
 	c.Println()
 	c.Println()
+}
+
+func PrintLogoS(w io.Writer) {
+	fmt.Fprintln(w, logo)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }
