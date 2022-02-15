@@ -19,41 +19,6 @@ env:
   GO111MODULE: "on"
 
 jobs:
-  build_cli_ubuntu:
-    name: Build CLI (Ubuntu)
-    runs-on: ubuntu-20.04
-
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.inputs.ref }}
-          # Allows to fetch all history for all branches and tags. Need this for proper versioning.
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.17
-
-      - name: Restore Go modules from cache
-        uses: actions/cache@v2
-        with:
-          path: /home/runner/go/pkg/mod
-          key: deps-${{ hashFiles('go.sum') }}
-
-      - name: Update Go modules
-        run: go mod download -json
-
-      - name: Build CLI
-        run: make build
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: neo-go-binaries-ubuntu
-          path: ./bin/neo-go
-          if-no-files-found: error
-
   build_cli_wsc:
     name: Build CLI (Windows Server Core)
     runs-on: windows-2022
@@ -81,37 +46,12 @@ jobs:
       - name: Build CLI
         run: make build
 
+      - name: Run VM command
+        run: ./bin/neo-go.exe vm
+
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: neo-go-binaries-wsc
           path: ./bin/neo-go.exe
           if-no-files-found: error
-
-  build_image_ubuntu:
-    needs: build_cli_ubuntu
-    name: Build Docker image (Ubuntu)
-    runs-on: ubuntu-20.04
-
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.inputs.ref }}
-          fetch-depth: 0
-
-      - name: Build Docker image
-        run: make image
-
-  build_image_wsc:
-    needs: build_cli_wsc
-    name: Build Docker image (Windows Server Core)
-    runs-on: windows-2022
-
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.inputs.ref }}
-          fetch-depth: 0
-
-      - name: Build Docker image
-        run: make image-wsc
