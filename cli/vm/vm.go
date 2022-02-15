@@ -1,11 +1,11 @@
 package vm
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/c-bata/go-prompt"
 	cli2 "github.com/nspcc-dev/neo-go/pkg/vm/cli"
 
 	"github.com/urfave/cli"
@@ -24,14 +24,81 @@ func NewCommands() []cli.Command {
 }
 
 func startVMPrompt(baseCtx *cli.Context) error {
-	afterF := func(context *cli.Context) error {
-		reader := bufio.NewReader(os.Stdin)
-		text, _ := reader.ReadString('\n')
-		text = strings.TrimRight(text, "\n")
-		commands := strings.Split(text, " ")
-		return context.App.Run(append([]string{"vm"}, commands...))
+
+	cmds := []cli.Command{
+		{
+			Name:  "exit",
+			Usage: "Exit the VM prompt",
+			Action: func(ctx *cli.Context) error {
+				return cli.NewExitError("Bye!", 0) // Need to return an error, otherwise ctl.After will be called.
+			},
+		},
+		{
+			Name:   "logo",
+			Hidden: true, // Need to be hidden, otherwise it will be shown to the user.
+			Usage:  "Usage of loadgo",
+			Action: func(ctx *cli.Context) error {
+				cli2.PrintLogoS(ctx.App.Writer)
+				return nil
+			},
+		},
+		{
+			Name:      "greet",
+			Usage:     "Greets the user",
+			UsageText: "greet <user_name>",
+			Action: func(ctx *cli.Context) error {
+				args := ctx.Args()
+				if !args.Present() {
+					return cli.NewExitError("No user name provided", 1)
+				}
+				var s string
+				for _, arg := range args {
+					s += arg
+				}
+				fmt.Fprintln(ctx.App.Writer, fmt.Sprintf("Hello, %s", s))
+				return nil
+			},
+		},
+		{
+			Name: "anotherCmdWithSubcmds", // IMPORTANT: do not use subcommands for VM CLI, because
+			// Action is not overriden for unknown subcommands, thus, default
+			// helpSubcommand.Action will be used which results in error for
+			// unknown command topic. // TODO: try to override anotherCmdWithSubcmds.Action
+			Usage: "Do subcommand",
+			Subcommands: []cli.Command{
+				{
+					Name:  "subcommand",
+					Usage: "Do subcommand",
+					Action: func(ctx *cli.Context) error {
+						fmt.Fprintln(ctx.App.Writer, "do subcommand")
+						return nil
+					},
+				},
+			},
+		},
+	}
+	var suggestions []prompt.Suggest
+	for _, cmd := range cmds {
+		if !cmd.Hidden {
+			suggestions = append(suggestions, prompt.Suggest{
+				Text:        cmd.Name,
+				Description: cmd.Usage,
+			})
+		}
+	}
+	suggestions = append(suggestions, prompt.Suggest{
+		Text:        "help",
+		Description: "Print help",
+	})
+	completer := func(d prompt.Document) []prompt.Suggest {
+		return prompt.FilterHasPrefix(suggestions, d.GetWordBeforeCursor(), true)
 	}
 
+	afterF := func(context *cli.Context) error {
+		t := prompt.Input("> ", completer)
+		commands := strings.Split(t, " ")
+		return context.App.Run(append([]string{"vm"}, commands...))
+	}
 	ctl := cli.NewApp()
 	ctl.Name = "VM CLI"
 
@@ -75,49 +142,7 @@ func startVMPrompt(baseCtx *cli.Context) error {
 		// return afterF(c)
 	}
 
-	ctl.Commands = []cli.Command{
-		{
-			Name:  "exit",
-			Usage: "Exit the VM prompt",
-			Action: func(ctx *cli.Context) error {
-				return cli.NewExitError("Bye!", 0) // Need to return an error, otherwise ctl.After will be called.
-			},
-		},
-		{
-			Name:   "logo",
-			Hidden: true, // Need to be hidden, otherwise it will be shown to the user.
-			Usage:  "Usage of loadgo",
-			Action: func(ctx *cli.Context) error {
-				cli2.PrintLogoS(ctx.App.Writer)
-				return nil
-			},
-		},
-		{
-			Name:  "someCmd",
-			Usage: "Print line",
-			Action: func(ctx *cli.Context) error {
-				fmt.Fprintln(ctx.App.Writer, "do someCmd")
-				return nil
-			},
-		},
-		{
-			Name: "anotherCmdWithSubcmds", // IMPORTANT: do not use subcommands for VM CLI, because
-			// Action is not overriden for unknown subcommands, thus, default
-			// helpSubcommand.Action will be used which results in error for
-			// unknown command topic. // TODO: try to override anotherCmdWithSubcmds.Action
-			Usage: "Do subcommand",
-			Subcommands: []cli.Command{
-				{
-					Name:  "subcommand",
-					Usage: "Do subcommand",
-					Action: func(ctx *cli.Context) error {
-						fmt.Fprintln(ctx.App.Writer, "do subcommand")
-						return nil
-					},
-				},
-			},
-		},
-	}
+	ctl.Commands = cmds
 	return ctl.Run([]string{"vm", "logo"})
 	/*
 		p := vmcli.NewWithConfig(true, os.Exit, &readline.Config{
