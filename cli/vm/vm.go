@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/c-bata/go-prompt"
+	"github.com/chzyer/readline"
 	cli2 "github.com/nspcc-dev/neo-go/pkg/vm/cli"
 
 	"github.com/urfave/cli"
@@ -49,7 +49,8 @@ func startVMPrompt(baseCtx *cli.Context) error {
 			Action: func(ctx *cli.Context) error {
 				args := ctx.Args()
 				if !args.Present() {
-					return cli.NewExitError("No user name provided", 1)
+					fmt.Fprintln(ctx.App.ErrWriter, "No user name provided")
+					return nil
 				}
 				var s string
 				for _, arg := range args {
@@ -77,25 +78,44 @@ func startVMPrompt(baseCtx *cli.Context) error {
 			},
 		},
 	}
-	var suggestions []prompt.Suggest
-	for _, cmd := range cmds {
-		if !cmd.Hidden {
-			suggestions = append(suggestions, prompt.Suggest{
-				Text:        cmd.Name,
-				Description: cmd.Usage,
-			})
+	/*
+		var suggestions []prompt.Suggest
+		for _, cmd := range cmds {
+			if !cmd.Hidden {
+				suggestions = append(suggestions, prompt.Suggest{
+					Text:        cmd.Name,
+					Description: cmd.Usage,
+				})
+			}
 		}
-	}
-	suggestions = append(suggestions, prompt.Suggest{
-		Text:        "help",
-		Description: "Print help",
-	})
-	completer := func(d prompt.Document) []prompt.Suggest {
-		return prompt.FilterHasPrefix(suggestions, d.GetWordBeforeCursor(), true)
-	}
+		suggestions = append(suggestions, prompt.Suggest{
+			Text:        "help",
+			Description: "Print help",
+		})
+		completer := func(d prompt.Document) []prompt.Suggest {
+			return prompt.FilterHasPrefix(suggestions, d.GetWordBeforeCursor(), true)
+		}
+	*/
+	l, err := readline.NewEx(&readline.Config{
+		Prompt:      "\033[31m»\033[0m ",
+		HistoryFile: "/tmp/readline.tmp",
+		// AutoComplete:    completer,
+		// InterruptPrompt: "^C",
+		EOFPrompt: "exit",
 
+		HistorySearchFold: true,
+		// FuncFilterInputRune: filterInput,
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer l.Close()
 	afterF := func(context *cli.Context) error {
-		t := prompt.Input("> ", completer)
+		// t := prompt.Input("> ", completer)
+		t, err := l.Readline()
+		if err != nil {
+			return err
+		}
 		commands := strings.Split(t, " ")
 		return context.App.Run(append([]string{"vm"}, commands...))
 	}

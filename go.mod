@@ -4,7 +4,7 @@ require (
 	github.com/abiosoft/ishell/v2 v2.0.2
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/btcsuite/btcd v0.22.0-beta
-	github.com/c-bata/go-prompt v0.2.6
+	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/golang-lru v0.5.4
