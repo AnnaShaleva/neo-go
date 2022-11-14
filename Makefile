@@ -96,10 +96,10 @@ version:
 	@echo $(VERSION)
 
 gh-docker-vars:
-	@echo "::set-output name=file::$(D_FILE)"
-	@echo "::set-output name=version::$(VERSION)"
-	@echo "::set-output name=repo::$(IMAGE_REPO)"
-	@echo "::set-output name=suffix::$(IMAGE_SUFFIX)"
+	@echo "file=$(D_FILE)" >> $(GITHUB_OUTPUT)
+	@echo "version=$(VERSION)" >> $(GITHUB_OUTPUT)
+	@echo "repo=$(IMAGE_REPO)" >> $(GITHUB_OUTPUT)
+	@echo "suffix=$(IMAGE_SUFFIX)" >> $(GITHUB_OUTPUT)
 
 test:
 	@go test ./... -cover
