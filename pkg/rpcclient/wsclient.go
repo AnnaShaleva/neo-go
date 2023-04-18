@@ -316,7 +316,18 @@ func (r *naiveReceiver) Receiver() interface{} {
 
 // TrySend implements notificationReceiver interface.
 func (r *naiveReceiver) TrySend(ntf Notification) bool {
-	if rpcevent.Matches(r, ntf) {
+	ok := rpcevent.Matches(r, ntf)
+	if ntf.Type == neorpc.NotaryRequestEventID {
+		ntr := ntf.Value.(*result.NotaryRequestEvent)
+		fmt.Printf("Naive receiver: notary request received\n\ttype: %s\n\tmain hash: %s\n\tfallback hash: %s\n\tVUB: %d\n\treceiver ID: %s\n\tmatches: %t\n",
+			ntr.Type,
+			ntr.NotaryRequest.MainTransaction.Hash().StringLE(),
+			ntr.NotaryRequest.FallbackTransaction.Hash().StringLE(),
+			ntr.NotaryRequest.MainTransaction.ValidUntilBlock,
+			r.eventID,
+			ok)
+	}
+	if ok {
 		r.ch <- ntf
 		return true
 	}
@@ -509,7 +520,11 @@ readloop:
 					connCloseErr = fmt.Errorf("failed to unmarshal event of type %s from JSON: %w", event, err)
 					break readloop
 				}
-			}
+			} /*
+				if ntf.Type == neorpc.NotaryRequestEventID {
+					ntr := ntf.Value.(*result.NotaryRequestEvent)
+					fmt.Printf("Client: notary request received\n\tmain hash: %s\n\tfallback hash: %s\n\tVUB: %d\n", ntr.NotaryRequest.MainTransaction.Hash().StringLE(), ntr.NotaryRequest.FallbackTransaction.Hash().StringLE(), ntr.NotaryRequest.MainTransaction.ValidUntilBlock)
+				}*/
 			c.notifySubscribers(ntf)
 		} else if rr.ID != nil && (rr.Error != nil || rr.Result != nil) {
 			id, err := strconv.ParseUint(string(rr.ID), 10, 64)
