@@ -71,11 +71,9 @@ jobs:
 
       - name: Attach binary to the release
         if: ${{ github.event_name == 'release' }}
-        run: gh release upload $RELEASE_TAG ./bin/neo-go-${{ matrix.os.bin-name }}-${{ matrix.arch }}${{ (matrix.os.bin-name == 'windows' && '.exe') || '' }}
+        run: gh release upload ${{ github.event.release.tag_name }} ./bin/neo-go/...
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          ISSUE: ${{ github.event.issue.html_url }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
