@@ -2,6 +2,11 @@
 
 This document outlines major changes between releases.
 
+## 0.104.1 "Test intermediate release"
+
+Improvements:
+  * allow to create incremental dumps
+
 ## 0.101.1 "Shallowness" (17 Mar 2023)
 
 Another 3.5.0-compatible version that delivers important bug fixes and
