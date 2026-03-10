@@ -231,8 +231,8 @@ func NewCommands() []*cli.Command {
 				UsageText: "export -w wallet [--wallet-config path] [--format <nep2|wif|pem>] [<address>]",
 				Description: `Prints the key for the given account to the standard output. The --format
    flag controls the output format: 'nep2' (default, the way NEP-6 wallets
-   store keys), 'wif' (plain-text WIF, requires an address argument), or 'pem'
-   (PKCS#8 PEM, requires an address argument). The --decrypt (-d) flag is
+   store keys), 'wif' (plain-text WIF), or 'pem' (PKCS#8 PEM). For 'wif' and
+   'pem' formats an address argument must be provided. The --decrypt (-d) flag is
    deprecated and equivalent to '--format wif'. When the private key is
    exported in plain text (wif/pem) it can be displayed in clear text on the
    console, so be extremely careful and don't use unless you really need it and
