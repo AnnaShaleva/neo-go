@@ -25,7 +25,9 @@ Improvements:
  * optimize public key method allocations (#4154)
  * support embedded struct fields in compiler (#4160)
  * support custom `System.Contract.Call`-based witness collection by notary
-   service (#4155) 
+   service (#4155)
+ * add `--format` flag to `wallet export` command supporting 'nep2', 'wif', and
+   'pem' output formats (#4161)
 
 Bugs fixed:
  * invalid MPT traversal order leading to incorrect `findstates` and
