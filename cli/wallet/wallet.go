@@ -69,9 +69,10 @@ var (
 		Usage:   "Decrypt encrypted keys (--decrypt is deprecated in favor of '--format wif').",
 	}
 	exportFormatFlag = &cli.StringFlag{
-		Name:  "format",
-		Usage: "Export format: 'nep2' (default), 'wif', or 'pem'.",
-		Value: "nep2",
+		Name:    "format",
+		Aliases: []string{"f"},
+		Usage:   "Export format: 'nep2' (default), 'wif', or 'pem'.",
+		Value:   "nep2",
 	}
 	inFlag = &cli.StringFlag{
 		Name:     "in",
@@ -525,7 +526,7 @@ func exportKeys(ctx *cli.Context) error {
 
 	needsDecrypt := format == "wif" || format == "pem"
 	if ctx.NArg() == 0 && needsDecrypt {
-		return cli.Exit(fmt.Errorf("address must be provided if '--format %s' is used", format), 1)
+		return cli.Exit(fmt.Errorf("address argument is required for '%s' export format", format), 1)
 	} else if ctx.NArg() > 0 {
 		// check address format just to catch possible typos
 		addr = ctx.Args().First()
