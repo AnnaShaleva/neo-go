@@ -172,7 +172,7 @@ func (s *TempStorage) put(ic *interop.Context, args []stackitem.Item) stackitem.
 
 	old := ic.DAO.GetStorageItem(s.ID, recordKey)
 	if old != nil {
-		// TODO: add a test-case
+		// TODO: add a test-case: put item with low validTill, then renew, then persist block with timestamp larger than the old validTill and ensure that the item is not removed from the storage in PostPersist cleanup.
 		ic.DAO.DeleteStorageItem(s.ID, makeValidTillKey(old[:8], recordKey))
 	}
 	s.putRecord(ic.DAO, recordKey, value, validTill)
