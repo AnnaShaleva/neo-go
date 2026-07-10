@@ -514,6 +514,7 @@ initialisation at Echidna hardfork. `Genesis` has the following structure:
 Genesis:
   MaxTraceableBlocks: 2102400
   MaxValidUntilBlockIncrement: 5760
+  TemporaryStorageMaxTTL: 168h
   Roles:
     NeoFSAlphabet:
       - 033238fa63bd08115ebf442d4af897eea2f6866e4c2001cd1f6e7656acdd91a5d3
@@ -544,6 +545,16 @@ where:
   `MaxValidUntilBlockIncrement` value of native Policy contract at `Echidna`
   hardfork. If not set, then `ProtocolConfiguration`-level
   `MaxValidUntilBlockIncrement` setting is used as the default value.
+
+  Note that this value is stored directly in the Policy contract storage, i.e. it
+  affects the chain's state, so it's important to keep it the same on all nodes
+  in frames of a single network.
+
+- `TemporaryStorageMaxTTL` is the maximum allowed TTL value for storage items
+  stored by the native TemporaryStorage contract. It has the `Duration` type.
+  Sub-milliseconds precision is not supported. This setting is used to initialize
+  `TemporaryStorageMaxTTL` value of native Policy contract at `Huyao` hardfork.
+  If not set, then the default value is `168h` (7 days).
 
   Note that this value is stored directly in the Policy contract storage, i.e. it
   affects the chain's state, so it's important to keep it the same on all nodes
@@ -602,7 +613,7 @@ in development and can change in an incompatible way.
 | `Echidna`       | Introduces `Designation` event extension with `Old` and `New` roles data to native RoleManagement contract. Adds support for `base64UrlEncode` and `base64UrlDecode` methods to native StdLib contract. Extends the list of required call flags for `registerCandidate`, `unregisterCandidate`and `vote` methods of native NeoToken contract with AllowNotify flag. Enables `onNEP17Payment` method of NEO contract for candidate registration. Introduces constraint for maximum number of execution notifications. Adds support for `recoverSecp256K1` method of native CryptoLib contract. Introduces `setMillisecondsPerBlock` and `getMillisecondsPerBlock` methods of native Policy contract. Introduces support for NotaryAssisted transaction attribute and native Notary contract. | https://github.com/nspcc-dev/neo-go/pull/3554 <br> https://github.com/nspcc-dev/neo-go/pull/3761 <br> https://github.com/nspcc-dev/neo-go/pull/3554 <br> https://github.com/neo-project/neo/pull/3597 <br> https://github.com/nspcc-dev/neo-go/pull/3700 <br> https://github.com/nspcc-dev/neo-go/pull/3640 <br> https://github.com/neo-project/neo/pull/3548 <br> https://github.com/nspcc-dev/neo-go/pull/3863 <br> https://github.com/neo-project/neo/pull/3696 <br> https://github.com/neo-project/neo/pull/3895 <br> https://github.com/nspcc-dev/neo-go/pull/3835 <br> https://github.com/nspcc-dev/neo-go/pull/3854 <br> https://github.com/neo-project/neo/pull/3175 <br> https://github.com/nspcc-dev/neo-go/pull/3478 <br> https://github.com/neo-project/neo/pull/3178 |
 | `Faun`          | Adds `getBlockedAccounts` method to native Policy contract. Adds `hexEncode` and `hexDecode` methods to native StdLib contract. Adds `getExecPicoFeeFactor` method to native Policy contract and enables 4 decimals for execution fee factor. Adds whitelist fee contract management to native Policy contract: `setWhitelistFeeContract`, `removeWhitelistFeeContract`, `getWhitelistFeeContracts` methods and `WhitelistFeeChanged` event. Adds funds recovery mechanism to native Policy contract: `recoverFund` method and `RecoveredFund` event. | https://github.com/nspcc-dev/neo-go/pull/3932 <br> https://github.com/nspcc-dev/neo-go/pull/4004 <br> https://github.com/neo-project/neo/pull/4147 <br> https://github.com/neo-project/neo/pull/4150 <br> https://github.com/nspcc-dev/neo-go/pull/4057 <br> https://github.com/neo-project/neo/pull/4278 <br> https://github.com/nspcc-dev/neo-go/pull/4052 <br> https://github.com/neo-project/neo/pull/4201 <br> https://github.com/nspcc-dev/neo-go/pull/4139 <br> https://github.com/neo-project/neo/pull/4328 |
 | `Gorgon`        | Fixes `SHR` and `SHL` VM opcode handlers for the case of zero shift. Adds bounds check for index of HASKEY VM opcode. Introduces panic on invalid signature/public key length for CryptoLib's `verifyWithECDsa` and `verifyWithEd25519` methods and `System.Crypto.CheckSig` and `System.Crypto.CheckMultisig` interops. Changes the order of contract's account block and contract's hash/storage erasure during native ContractManagement's `destroy` processing. | https://github.com/nspcc-dev/neo-go/pull/4197 <br> https://github.com/neo-project/neo/pull/4516 <br> https://github.com/nspcc-dev/neo-go/pull/4197 <br> https://github.com/nspcc-dev/neo-go/pull/4197 <br> https://github.com/neo-project/neo/pull/4449 <br> https://github.com/nspcc-dev/neo-go/pull/4236 <br> https://github.com/neo-project/neo/pull/4539 <br> https://github.com/nspcc-dev/neo-go/pull/4233 |
-| `Huyao`         | The latest unstable hardfork, doesn't introduce new functionality yet. | https://github.com/nspcc-dev/neo-go/pull/4330 <br> https://github.com/neo-project/neo/pull/4571 |
+| `Huyao`         | The latest unstable hardfork. Introduces TemporaryStorage native contract and corresponding Policy extension for temporary storage TTL configuration. | https://github.com/nspcc-dev/neo-go/pull/4330 <br> https://github.com/neo-project/neo/pull/4571 <br> https://github.com/AnnaShaleva/neo-go/pull/16 |
 
 ## DB compatibility
 

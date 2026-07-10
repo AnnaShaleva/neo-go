@@ -113,24 +113,20 @@ func (s *TempStorage) OnPersist(ic *interop.Context) error {
 func (s *TempStorage) PostPersist(ic *interop.Context) error {
 	// Remove top maxCleanupBatchSize oldest expired entries, the newer expired
 	// ones will also be removed eventually.
-	var (
-		i     int
-		start = make([]byte, 8)
-	)
+	var i int
+	start := make([]byte, 8)
 	ic.DAO.Seek(s.ID, storage.SeekRange{
 		Prefix: []byte{prefixTTL},
 		Start:  start,
 	}, func(k, _ []byte) bool {
-		if binary.BigEndian.Uint64(k) >= ic.Block.Timestamp {
+		if len(k) < 8 {
+			return true
+		}
+		if binary.BigEndian.Uint64(k[:8]) >= ic.Block.Timestamp {
 			return false
 		}
-		key := append([]byte{prefixTTL}, k...)
-		ic.DAO.DeleteStorageItem(s.ID, key)
-
-		key = key[:0]
-		key[0] = prefixTempStorage
-		copy(key[1:], k[9:])
-		ic.DAO.DeleteStorageItem(s.ID, key)
+		ic.DAO.DeleteStorageItem(s.ID, append([]byte{prefixTTL}, k...))
+		ic.DAO.DeleteStorageItem(s.ID, append([]byte{prefixTempStorage}, k[8:]...))
 
 		i++
 		return i < maxCleanupBatchSize
@@ -197,8 +193,8 @@ func (s *TempStorage) get(ic *interop.Context, args []stackitem.Item) stackitem.
 }
 
 func (s *TempStorage) getByHash(ic *interop.Context, args []stackitem.Item) stackitem.Item {
-	key := toLimitedBytesGeneric(args[0], limits.MaxStorageKeyLen)
-	contractHash := toUint160(args[1])
+	contractHash := toUint160(args[0])
+	key := toLimitedBytesGeneric(args[1], limits.MaxStorageKeyLen)
 	res, _ := s.getInternal(ic, contractHash, key)
 	return res
 }
@@ -210,8 +206,8 @@ func (s *TempStorage) getExpiration(ic *interop.Context, args []stackitem.Item) 
 }
 
 func (s *TempStorage) getExpirationByHash(ic *interop.Context, args []stackitem.Item) stackitem.Item {
-	key := toLimitedBytesGeneric(args[0], limits.MaxStorageKeyLen)
-	contractHash := toUint160(args[1])
+	contractHash := toUint160(args[0])
+	key := toLimitedBytesGeneric(args[1], limits.MaxStorageKeyLen)
 	_, exp := s.getInternal(ic, contractHash, key)
 	return stackitem.Make(exp)
 }
@@ -358,7 +354,7 @@ func makeTempRecordKey(contractID int32, key []byte) []byte {
 // accepts 8 BE bytes of expiration timestamp as the first argument.
 func makeValidTillKey(validTill []byte, recordKey []byte) []byte {
 	buf := make([]byte, 8+len(recordKey))
-	recordKey[0] = prefixTTL
+	buf[0] = prefixTTL
 	copy(buf[1:], validTill) // use BigEndian for lexicographic sorting during DB Seek.
 	copy(buf[9:], recordKey[1:])
 	return buf
