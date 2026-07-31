@@ -163,6 +163,24 @@ func TestStdLibJSON(t *testing.T) {
 
 			actual = s.jsonDeserialize(ic, []stackitem.Item{stackitem.Make("9007199254740993")})
 			require.Equal(t, stackitem.Make(9007199254740992), actual)
+
+			actual = s.jsonDeserialize(ic, []stackitem.Item{stackitem.Make("4.389364916666667e+34")})
+			require.Equal(t, "43893649166666670000000000000000000", actual.Value().(*big.Int).String())
+
+			actual = s.jsonDeserialize(ic, []stackitem.Item{stackitem.Make("2.2218116666666666e+21")})
+			require.Equal(t, "2221811666666666600000", actual.Value().(*big.Int).String())
+
+			actual = s.jsonDeserialize(ic, []stackitem.Item{stackitem.Make("11039175000000000000")})
+			require.Equal(t, "11039175000000000000", actual.Value().(*big.Int).String())
+
+			actual = s.jsonDeserialize(ic, []stackitem.Item{stackitem.Make("9.07199254740993e+34")})
+			require.Equal(t, "90719925474099300000000000000000000", actual.Value().(*big.Int).String())
+
+			actual = s.jsonDeserialize(ic, []stackitem.Item{stackitem.Make("9.007199254740993e+34")})
+			require.Equal(t, "90071992547409940000000000000000000", actual.Value().(*big.Int).String())
+
+			actual = s.jsonDeserialize(ic, []stackitem.Item{stackitem.Make("9007199254740993e+34")})
+			require.Equal(t, "90071992547409930000000000000000000000000000000000", actual.Value().(*big.Int).String())
 		})
 		t.Run("Bad", func(t *testing.T) {
 			require.Panics(t, func() {

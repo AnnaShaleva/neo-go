@@ -235,23 +235,26 @@ func (d *decoder) decode() (Item, error) {
 	case json.Number:
 		ts := t.String()
 		var (
-			num  *big.Int
-			prec uint = CompatIntegerPrec
+			f   *big.Float
+			num = new(big.Int)
+			err error
 		)
-		// Int.SetString() is more efficient, but there are special
-		// cases requiring additional care for C# compatibility, that's
-		// why we're going through float first:
-		//  * scientific notation, like 2.8e+22
-		//  * integers with fp notation, like 123.000
-		//  * numbers requiring more than 53 bits of mantissa
 		if d.bestIntPrecision {
-			prec = MaxIntegerPrec
+			f, _, err = big.ParseFloat(ts, 10, MaxIntegerPrec, big.ToNearestEven)
+		} else {
+			// Mimic C# JSON number conversion in StdLib:
+			//  1. Parse number as double.
+			//  2. Convert double to string.
+			//  3. Parse resulting string as BigInteger.
+			df, err := strconv.ParseFloat(ts, 64)
+			if err != nil {
+				return nil, fmt.Errorf("%w (malformed exp value for int)", ErrInvalidValue)
+			}
+			f, _, err = big.ParseFloat(strconv.FormatFloat(df, 'g', -1, 64), 10, MaxIntegerPrec, big.ToNearestEven)
 		}
-		f, _, err := big.ParseFloat(ts, 10, prec, big.ToNearestEven)
 		if err != nil {
 			return nil, fmt.Errorf("%w (malformed exp value for int)", ErrInvalidValue)
 		}
-		num = new(big.Int)
 		_, acc := f.Int(num)
 		if acc != big.Exact {
 			return nil, fmt.Errorf("%w (integer)", ErrInvalidValue)
