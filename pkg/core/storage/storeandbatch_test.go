@@ -35,6 +35,9 @@ func pushSeekDataSet(t *testing.T, s Store) []KeyValue {
 		{[]byte("22"), []byte("bard")},
 		{[]byte("30"), []byte("bare")},
 		{[]byte("31"), []byte("barf")},
+		{[]byte("4"), []byte("barg")},
+		{[]byte("40"), []byte("barh")},
+		{[]byte("41"), []byte("bari")},
 	}
 	up := NewMemCachedStore(s)
 	for _, v := range kvs {
@@ -48,12 +51,6 @@ func pushSeekDataSet(t *testing.T, s Store) []KeyValue {
 func testStoreSeek(t *testing.T, s Store) {
 	kvs := pushSeekDataSet(t, s)
 	check := func(t *testing.T, goodprefix, start []byte, goodkvs []KeyValue, backwards bool, cont func(k, v []byte) bool) {
-		// Seek result expected to be sorted in an ascending (for forwards seeking) or descending (for backwards seeking) way.
-		var cmpFunc = getCmpFunc(backwards)
-		slices.SortFunc(goodkvs, func(a, b KeyValue) int {
-			return cmpFunc(a.Key, b.Key)
-		})
-
 		rng := SeekRange{
 			Prefix: goodprefix,
 			Start:  start,
@@ -61,6 +58,12 @@ func testStoreSeek(t *testing.T, s Store) {
 		if backwards {
 			rng.Backwards = true
 		}
+		// Seek result expected to be sorted in an ascending (for forwards seeking) or descending (for backwards seeking) way.
+		var cmpFunc = getCmpFunc(backwards)
+		slices.SortFunc(goodkvs, func(a, b KeyValue) int {
+			return cmpFunc(a.Key, b.Key)
+		})
+
 		actual := make([]KeyValue, 0, len(goodkvs))
 		s.Seek(rng, func(k, v []byte) bool {
 			actual = append(actual, KeyValue{
@@ -74,6 +77,72 @@ func testStoreSeek(t *testing.T, s Store) {
 		})
 		assert.Equal(t, goodkvs, actual)
 	}
+
+	t.Run("non-empty prefix, nil start", func(t *testing.T) {
+		t.Run("forwards", func(t *testing.T) {
+			t.Run("good", func(t *testing.T) {
+				// Given this prefix...
+				goodprefix := []byte("2")
+				// and nil start range...
+				start := []byte(nil)
+				// these pairs should be found.
+				goodkvs := []KeyValue{
+					kvs[2], // key = "20"
+					kvs[3], // key = "21"
+					kvs[4], // key = "22"
+				}
+				check(t, goodprefix, start, goodkvs, false, nil)
+			})
+			t.Run("no matching items", func(t *testing.T) {
+				goodprefix := []byte("0")
+				start := []byte(nil)
+				check(t, goodprefix, start, []KeyValue{}, false, nil)
+			})
+			t.Run("early stop", func(t *testing.T) {
+				// Given this prefix...
+				goodprefix := []byte("2")
+				// and nil start range...
+				start := []byte(nil)
+				// these pairs should be found.
+				goodkvs := []KeyValue{
+					kvs[2], // key = "20"
+					kvs[3], // key = "21"
+				}
+				check(t, goodprefix, start, goodkvs, false, func(k, v []byte) bool {
+					return string(k) < "21"
+				})
+			})
+		})
+
+		t.Run("backwards", func(t *testing.T) {
+			t.Run("good", func(t *testing.T) {
+				goodprefix := []byte("2")
+				start := []byte(nil)
+				goodkvs := []KeyValue{
+					kvs[4], // key = "22"
+					kvs[3], // key = "21"
+					kvs[2], // key = "20"
+				}
+				check(t, goodprefix, start, goodkvs, true, nil)
+			})
+			t.Run("no matching items", func(t *testing.T) {
+				goodprefix := []byte("0")
+				start := []byte(nil)
+				check(t, goodprefix, start, []KeyValue{}, true, nil)
+			})
+			t.Run("early stop", func(t *testing.T) {
+				goodprefix := []byte("2")
+				start := []byte(nil)
+				goodkvs := []KeyValue{
+					kvs[4], // key = "22"
+					kvs[3], // key = "21"
+				}
+				check(t, goodprefix, start, goodkvs, true, func(k, v []byte) bool {
+					return string(k) > "21"
+				})
+			})
+		})
+	})
 
 	t.Run("non-empty prefix, empty start", func(t *testing.T) {
 		t.Run("forwards", func(t *testing.T) {
@@ -113,30 +182,17 @@ func testStoreSeek(t *testing.T, s Store) {
 
 		t.Run("backwards", func(t *testing.T) {
 			t.Run("good", func(t *testing.T) {
-				goodprefix := []byte("2")
+				goodprefix := []byte("4")
 				start := []byte{}
 				goodkvs := []KeyValue{
-					kvs[4], // key = "22"
-					kvs[3], // key = "21"
-					kvs[2], // key = "20"
+					kvs[7], // key = "4"
 				}
 				check(t, goodprefix, start, goodkvs, true, nil)
 			})
 			t.Run("no matching items", func(t *testing.T) {
-				goodprefix := []byte("0")
-				start := []byte{}
-				check(t, goodprefix, start, []KeyValue{}, true, nil)
-			})
-			t.Run("early stop", func(t *testing.T) {
 				goodprefix := []byte("2")
 				start := []byte{}
-				goodkvs := []KeyValue{
-					kvs[4], // key = "22"
-					kvs[3], // key = "21"
-				}
-				check(t, goodprefix, start, goodkvs, true, func(k, v []byte) bool {
-					return string(k) > "21"
-				})
+				check(t, goodprefix, start, []KeyValue{}, true, nil)
 			})
 		})
 	})
