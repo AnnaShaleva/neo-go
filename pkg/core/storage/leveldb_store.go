@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // LevelDBStore is the official storage implementation for storing and retrieving
@@ -71,8 +73,12 @@ func (s *LevelDBStore) PutChangeSet(puts map[string][]byte, stores map[string][]
 
 // Seek implements the Store interface.
 func (s *LevelDBStore) Seek(rng SeekRange, f func(k, v []byte) bool) {
-	iter := s.db.NewIterator(seekRangeToPrefixes(rng), nil)
-	s.seek(iter, rng.Backwards, f)
+	r := seekRangeToPrefixes(rng)
+	if rng.Backwards {
+		r = util.BytesPrefix(rng.Prefix)
+	}
+	iter := s.db.NewIterator(r, nil)
+	s.seek(iter, rng, f)
 }
 
 // SeekGC implements the Store interface.
@@ -81,8 +87,12 @@ func (s *LevelDBStore) SeekGC(rng SeekRange, keepCont func(k, v []byte) (bool, b
 	if err != nil {
 		return err
 	}
-	iter := tx.NewIterator(seekRangeToPrefixes(rng), nil)
-	s.seek(iter, rng.Backwards, func(k, v []byte) bool {
+	r := seekRangeToPrefixes(rng)
+	if rng.Backwards {
+		r = util.BytesPrefix(rng.Prefix)
+	}
+	iter := tx.NewIterator(r, nil)
+	s.seek(iter, rng, func(k, v []byte) bool {
 		keep, cont := keepCont(k, v)
 		if !keep {
 			err = tx.Delete(k, nil)
@@ -98,17 +108,27 @@ func (s *LevelDBStore) SeekGC(rng SeekRange, keepCont func(k, v []byte) (bool, b
 	return tx.Commit()
 }
 
-func (s *LevelDBStore) seek(iter iterator.Iterator, backwards bool, f func(k, v []byte) bool) {
+func (s *LevelDBStore) seek(iter iterator.Iterator, rng SeekRange, f func(k, v []byte) bool) {
 	var (
 		next func() bool
 		ok   bool
 	)
 
-	if !backwards {
+	if !rng.Backwards {
 		ok = iter.Next()
 		next = iter.Next
 	} else {
-		ok = iter.Last()
+		if rng.Start == nil {
+			ok = iter.Last()
+		} else {
+			start := append(append([]byte{}, rng.Prefix...), rng.Start...)
+			ok = iter.Seek(start)
+			if !ok {
+				ok = iter.Last()
+			} else if bytes.Compare(iter.Key(), start) > 0 {
+				ok = iter.Prev()
+			}
+		}
 		next = iter.Prev
 	}
 

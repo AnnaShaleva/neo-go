@@ -163,17 +163,27 @@ func boltSeek(txopener func(func(*bbolt.Tx) error) error, bucket []byte, rng See
 			k, v = c.Seek(rang.Start)
 			next = c.Next
 		} else {
-			if len(rang.Limit) == 0 {
-				lastKey, _ := c.Last()
-				k, v = c.Seek(lastKey)
+			if rng.Start == nil {
+				if len(rang.Limit) == 0 {
+					lastKey, _ := c.Last()
+					k, v = c.Seek(lastKey)
+				} else {
+					c.Seek(rang.Limit)
+					k, v = c.Prev()
+				}
 			} else {
-				c.Seek(rang.Limit)
-				k, v = c.Prev()
+				start := append(append([]byte{}, rng.Prefix...), rng.Start...)
+				k, v = c.Seek(start)
+				if k == nil {
+					k, v = c.Last()
+				} else if bytes.Compare(k, start) > 0 {
+					k, v = c.Prev()
+				}
 			}
 			next = c.Prev
 		}
 
-		for ; k != nil && bytes.HasPrefix(k, rng.Prefix) && (len(rang.Limit) == 0 || bytes.Compare(k, rang.Limit) <= 0); k, v = next() {
+		for ; k != nil && bytes.HasPrefix(k, rng.Prefix); k, v = next() {
 			cont, err := f(c, k, v)
 			if err != nil {
 				return err
