@@ -125,6 +125,9 @@ func (s *LevelDBStore) seek(iter iterator.Iterator, rng SeekRange, f func(k, v [
 			ok = iter.Seek(start)
 			if !ok {
 				ok = iter.Last()
+				if ok && !bytes.HasPrefix(iter.Key(), rng.Prefix) {
+					ok = false
+				}
 			} else if bytes.Compare(iter.Key(), start) > 0 {
 				ok = iter.Prev()
 			}
@@ -133,6 +136,9 @@ func (s *LevelDBStore) seek(iter iterator.Iterator, rng SeekRange, f func(k, v [
 	}
 
 	for ; ok; ok = next() {
+		if !bytes.HasPrefix(iter.Key(), rng.Prefix) {
+			break
+		}
 		if !f(iter.Key(), iter.Value()) {
 			break
 		}
