@@ -681,32 +681,28 @@ var rpcTestCases = map[string][]rpcTestCase{
 			name:   "positive, by hash",
 			params: fmt.Sprintf(`["%s", "dGVzdGtleQ=="]`, testContractHashLE),
 			result: func(e *executor) any {
-				v := base64.StdEncoding.EncodeToString([]byte("newtestvalue"))
-				return &v
+				return new(base64.StdEncoding.EncodeToString([]byte("newtestvalue")))
 			},
 		},
 		{
 			name:   "positive, by address",
 			params: fmt.Sprintf(`["%s", "dGVzdGtleQ=="]`, address.Uint160ToString(testContractHash)),
 			result: func(e *executor) any {
-				v := base64.StdEncoding.EncodeToString([]byte("newtestvalue"))
-				return &v
+				return new(base64.StdEncoding.EncodeToString([]byte("newtestvalue")))
 			},
 		},
 		{
 			name:   "positive, by ID",
 			params: fmt.Sprintf(`[%d, "dGVzdGtleQ=="]`, basicchain.RublesContractID),
 			result: func(e *executor) any {
-				v := base64.StdEncoding.EncodeToString([]byte("newtestvalue"))
-				return &v
+				return new(base64.StdEncoding.EncodeToString([]byte("newtestvalue")))
 			},
 		},
 		{
 			name:   "positive, by native name",
 			params: fmt.Sprintf(`["%s", "%s"]`, nativenames.Policy, base64.StdEncoding.EncodeToString([]byte{19})), // storgePrice key.
 			result: func(e *executor) any {
-				v := bigint.ToBytes(big.NewInt(native.DefaultStoragePrice))
-				return &v
+				return new(bigint.ToBytes(big.NewInt(native.DefaultStoragePrice)))
 			},
 		},
 		{
@@ -745,8 +741,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 			name:   "positive",
 			params: fmt.Sprintf(`["%s", "%s", "%s"]`, block20StateRootLE, testContractHashLE, base64.StdEncoding.EncodeToString([]byte("aa10"))),
 			result: func(e *executor) any {
-				v := base64.StdEncoding.EncodeToString([]byte("v2"))
-				return &v
+				return new(base64.StdEncoding.EncodeToString([]byte("v2")))
 			},
 		},
 		{
@@ -1088,8 +1083,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 		{
 			params: "[]",
 			result: func(e *executor) any {
-				v := "0x" + e.chain.CurrentBlockHash().StringLE()
-				return &v
+				return new("0x" + e.chain.CurrentBlockHash().StringLE())
 			},
 		},
 	},
@@ -1149,8 +1143,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 		{
 			params: "[]",
 			result: func(e *executor) any {
-				v := int(e.chain.BlockHeight() + 1)
-				return &v
+				return new(int(e.chain.BlockHeight() + 1))
 			},
 		},
 	},
@@ -1161,8 +1154,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 				// We don't have `t` here for proper handling, but
 				// error here would lead to panic down below.
 				block, _ := e.chain.GetBlock(e.chain.GetHeaderHash(1))
-				expectedHash := "0x" + block.Hash().StringLE()
-				return &expectedHash
+				return new("0x" + block.Hash().StringLE())
 			},
 		},
 		{
@@ -1208,8 +1200,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 		{
 			params: "[]",
 			result: func(e *executor) any {
-				v := int(e.chain.HeaderHeight() + 1)
-				return &v
+				return new(int(e.chain.HeaderHeight() + 1))
 			},
 		},
 	},
@@ -1260,8 +1251,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 		{
 			params: "[]",
 			result: func(*executor) any {
-				v := 0
-				return &v
+				return new(0)
 			},
 		},
 	},
@@ -1318,8 +1308,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 			name:   "positive",
 			params: `["` + deploymentTxHash + `"]`,
 			result: func(e *executor) any {
-				h := 0
-				return &h
+				return new(0)
 			},
 			check: func(t *testing.T, e *executor, resp any) {
 				h, ok := resp.(*int)
@@ -2438,7 +2427,7 @@ func TestSubmitOracle(t *testing.T) {
 func TestNotaryRequestRPC(t *testing.T) {
 	var notaryRequest1, notaryRequest2 *payload.P2PNotaryRequest
 	rpcSubmit := `{"jsonrpc": "2.0", "id": 1, "method": "submitnotaryrequest", "params": %s}`
-	rpcPool := `{"jsonrpc": "2.0", "id": 1, "method": "getrawnotarypool", "params": []}`
+	rpcPool := `{"jsonrpc": "2.0", "id": 1, "method": "getrawnotarypool", "params": %s}`
 	rpcTx := `{"jsonrpc": "2.0", "id": 1, "method": "getrawnotarytransaction", "params": ["%s", %d]}`
 
 	t.Run("disabled P2PSigExtensions", func(t *testing.T) {
@@ -2450,7 +2439,7 @@ func TestNotaryRequestRPC(t *testing.T) {
 			checkErrGetResult(t, body, true, neorpc.InternalServerErrorCode)
 		})
 		t.Run("getrawnotarypool", func(t *testing.T) {
-			body := doRPCCallOverHTTP(rpcPool, httpSrv.URL, t)
+			body := doRPCCallOverHTTP(fmt.Sprintf(rpcPool, "[]"), httpSrv.URL, t)
 			checkErrGetResult(t, body, true, neorpc.InternalServerErrorCode)
 		})
 		t.Run("getrawnotarytransaction", func(t *testing.T) {
@@ -2471,11 +2460,15 @@ func TestNotaryRequestRPC(t *testing.T) {
 	}
 
 	t.Run("getrawnotarypool", func(t *testing.T) {
-		t.Run("empty pool", func(t *testing.T) {
-			body := doRPCCallOverHTTP(rpcPool, httpSrv.URL, t)
+		getPool := func(t *testing.T, p string) *result.RawNotaryPool {
+			body := doRPCCallOverHTTP(fmt.Sprintf(rpcPool, p), httpSrv.URL, t)
 			res := checkErrGetResult(t, body, false, 0)
 			actual := new(result.RawNotaryPool)
 			require.NoError(t, json.Unmarshal(res, actual))
+			return actual
+		}
+		t.Run("empty pool", func(t *testing.T) {
+			actual := getPool(t, "[]")
 			require.Equal(t, 0, len(actual.Hashes))
 		})
 
@@ -2488,10 +2481,7 @@ func TestNotaryRequestRPC(t *testing.T) {
 
 		t.Run("nonempty pool", func(t *testing.T) {
 			// get notary pool & check tx hashes
-			body := doRPCCallOverHTTP(rpcPool, httpSrv.URL, t)
-			res := checkErrGetResult(t, body, false, 0)
-			actual := new(result.RawNotaryPool)
-			require.NoError(t, json.Unmarshal(res, actual))
+			actual := getPool(t, "[]")
 			require.Equal(t, 1, len(actual.Hashes))
 			for actMain, actFallbacks := range actual.Hashes {
 				require.Equal(t, notaryRequest1.MainTransaction.Hash(), actMain)
@@ -2508,10 +2498,7 @@ func TestNotaryRequestRPC(t *testing.T) {
 
 		t.Run("pool with 2", func(t *testing.T) {
 			// get notary pool & check tx hashes
-			body := doRPCCallOverHTTP(rpcPool, httpSrv.URL, t)
-			res := checkErrGetResult(t, body, false, 0)
-			actual := new(result.RawNotaryPool)
-			require.NoError(t, json.Unmarshal(res, actual))
+			actual := getPool(t, "[]")
 			require.Equal(t, 1, len(actual.Hashes))
 			for actMain, actFallbacks := range actual.Hashes {
 				require.Equal(t, notaryRequest1.MainTransaction.Hash(), actMain)
@@ -2520,6 +2507,22 @@ func TestNotaryRequestRPC(t *testing.T) {
 				require.Equal(t, notaryRequest1.FallbackTransaction.Hash(), actFallbacks[1])
 				require.Equal(t, notaryRequest2.FallbackTransaction.Hash(), actFallbacks[0])
 			}
+		})
+		t.Run("filter by signer", func(t *testing.T) {
+			actual := getPool(t, fmt.Sprintf(`["%s"]`, testchain.PrivateKeyByID(0).Address()))
+			require.Equal(t, 1, len(actual.Hashes))
+			for actMain, actFallbacks := range actual.Hashes {
+				require.Equal(t, notaryRequest1.MainTransaction.Hash(), actMain)
+				require.Equal(t, 2, len(actFallbacks))
+			}
+		})
+		t.Run("filter by unknown signer", func(t *testing.T) {
+			actual := getPool(t, fmt.Sprintf(`["%s"]`, address.Uint160ToString(util.Uint160{1, 2, 3})))
+			require.Equal(t, 0, len(actual.Hashes))
+		})
+		t.Run("invalid signer filter", func(t *testing.T) {
+			body := doRPCCallOverHTTP(fmt.Sprintf(rpcPool, `[1]`), httpSrv.URL, t)
+			checkErrGetResult(t, body, true, neorpc.InvalidParamsCode)
 		})
 	})
 
@@ -3051,12 +3054,11 @@ func testRPCProtocol(t *testing.T, doRPCCall func(string, string, *testing.T) []
 		})
 
 		t.Run("verbose != 0", func(t *testing.T) {
-			nextHash := chain.GetHeaderHash(hdr.Index + 1)
 			expected := &result.Header{
 				Header: *hdr,
 				BlockMetadata: result.BlockMetadata{
 					Size:          io.GetVarSize(hdr),
-					NextBlockHash: &nextHash,
+					NextBlockHash: new(chain.GetHeaderHash(hdr.Index + 1)),
 					Confirmations: e.chain.BlockHeight() - hdr.Index + 1,
 				},
 			}
@@ -3070,25 +3072,52 @@ func testRPCProtocol(t *testing.T, doRPCCall func(string, string, *testing.T) []
 		mp := chain.GetMemPool()
 		// `expected` stores hashes of previously added txs
 		expected := make([]util.Uint256, 0)
+		expectedFiltered := make([]util.Uint256, 0)
 		for _, tx := range mp.GetVerifiedTransactions() {
 			expected = append(expected, tx.Hash())
 		}
-		for range 5 {
+		signer := util.Uint160{1, 2, 3}
+		for i := range 5 {
 			tx := transaction.New([]byte{byte(opcode.PUSH1)}, 0)
-			tx.Signers = []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}
+			s := util.Uint160{4, 5, 6}
+			if i%2 == 0 {
+				s = signer
+			}
+			tx.Signers = []transaction.Signer{{Account: s}}
 			assert.NoError(t, mp.Add(tx, &FeerStub{}))
 			expected = append(expected, tx.Hash())
+			if i%2 == 0 {
+				expectedFiltered = append(expectedFiltered, tx.Hash())
+			}
 		}
 
-		rpc := `{"jsonrpc": "2.0", "id": 1, "method": "getrawmempool", "params": []}`
-		body := doRPCCall(rpc, httpSrv.URL, t)
+		// Good.
+		rpc := `{"jsonrpc": "2.0", "id": 1, "method": "getrawmempool", "params": %s}`
+		body := doRPCCall(fmt.Sprintf(rpc, "[]"), httpSrv.URL, t)
 		res := checkErrGetResult(t, body, false, 0)
-
 		var actual []util.Uint256
 		err := json.Unmarshal(res, &actual)
 		require.NoErrorf(t, err, "could not parse response: %s", res)
-
 		assert.ElementsMatch(t, expected, actual)
+
+		// Filtered, hashes only.
+		body = doRPCCall(fmt.Sprintf(rpc, fmt.Sprintf(`[false, "%s"]`, signer.StringLE())), httpSrv.URL, t)
+		res = checkErrGetResult(t, body, false, 0)
+		actual = nil
+		err = json.Unmarshal(res, &actual)
+		require.NoErrorf(t, err, "could not parse response: %s", res)
+		assert.ElementsMatch(t, expectedFiltered, actual)
+
+		// Filtered, verbose.
+		body = doRPCCall(fmt.Sprintf(rpc, fmt.Sprintf(`[true, "%s"]`, signer.StringLE())), httpSrv.URL, t)
+		res = checkErrGetResult(t, body, false, 0)
+		verboseRes := new(result.RawMempool)
+		require.NoError(t, json.Unmarshal(res, verboseRes))
+		assert.ElementsMatch(t, expectedFiltered, verboseRes.Verified)
+
+		// Invalid signer filter.
+		body = doRPCCall(fmt.Sprintf(rpc, `[false, "not-a-signer"]`), httpSrv.URL, t)
+		checkErrGetResult(t, body, true, neorpc.InvalidParamsCode)
 	})
 
 	t.Run("getnep17transfers", func(t *testing.T) {

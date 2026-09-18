@@ -640,6 +640,20 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 				return []util.Uint256{hash}
 			},
 		},
+		{
+			name: "positive, filtered",
+			invoke: func(c *Client) (any, error) {
+				return c.GetRawMemPool(util.Uint160{1, 2, 3})
+			},
+			serverResponse: `{"jsonrpc":"2.0","id":1,"result":["0x9786cce0dddb524c40ddbdd5e31a41ed1f6b5c8a683c122f627ca4a007a7cf4e"]}`,
+			result: func(c *Client) any {
+				hash, err := util.Uint256DecodeStringLE("9786cce0dddb524c40ddbdd5e31a41ed1f6b5c8a683c122f627ca4a007a7cf4e")
+				if err != nil {
+					panic(err)
+				}
+				return []util.Uint256{hash}
+			},
+		},
 	},
 	"getrawtransaction": {
 		{
@@ -798,8 +812,7 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 			invoke: func(c *Client) (any, error) {
 				root, _ := util.Uint256DecodeStringLE("252e9d73d49c95c7618d40650da504e05183a1b2eed0685e42c360413c329170")
 				cHash, _ := util.Uint160DecodeStringLE("5c9e40a12055c6b9e3f72271c9779958c842135d")
-				count := 1
-				return c.FindStates(root, cHash, []byte("aa"), []byte("aa00"), &count)
+				return c.FindStates(root, cHash, []byte("aa"), []byte("aa00"), new(1))
 			},
 			serverResponse: `{"id":1,"jsonrpc":"2.0","result":{"results":[{"key":"YWExMA==","value":"djI="}],"firstProof":"CAEAAABhYTEwCXIAA5KNHjQ1+LFX4lQBLjMAhaLtTJnfuI86O7WnNdlshsYWBAQEBAQEBAQDTzD7MJp2KW6E8BNVjjjgZMTAjI/GI3ZrTmR2UUOtSeIEBAQEBAPKPqb0qnb4Ywz6gqpNKCUNQsfBmAnKc5p3dxokSQRpwgRSAAQDPplG1wee4KOfkehaF94R5uoKSgvQL1j5gkFTN4ywYaIEBAOhOyI39MZfoKc940g57XeqwRnxh7P62fKjnfEtBzQxHQQEBAQEBAQEBAQEBCkBBgAAAAAAAAM6A1UrwFYZAEMfe6go3jX25xz2sHsovQ2UO/UHqZZOXLIABAOwg7pkXyaTR85yQIvYnoGaG/OVRLRHOj+nhZnXb6dVtAQEBAPnciBUp3uspLQTajKTlAxgrNe+3tlqlbwlNRkz0eNmhQMzoMcWOFi9nCyn+eM5lA6Pq67DxzTQDlHljh8g8kRtJAPq9hxzTgreK0qDTavsethixguZYfV7wDmKfumMglnoqQQEBAQEBAM1x2dVBdf5BJ0Xvw2qqhvpKqxdHb8/HMFWiXkJj1uAAQQEJgEDAQYBA5kV2WLkgey9C5z6gZT69VLKcEuwyY8P853rNtGhT3NeUgAEBAQDiX59K9PuJ5RE7Z1uj7q/QJ8FGf8avLdWM7hwmWkVH2gEBAQEBAQEBAQEBAQD1SubX5XhFHcUOWdUzg1bXmDwWJwt+wpU3FOdFkU1PXBSAAQDHCzfEQyqwOO263EE6HER1vWDrwz8JiEHEOXfZ3kX7NYEBAQDEH++Hy8wBcniKuWVevaAwzHCh60kzncU30E5fDC3gJsEBAQEBAQEBAQEBCUBAgMAA1wt18LbxMKdYcJ+nEDMMWZbRsu550l8HGhcYhpl6DjSBAICdjI=","truncated":true}}`,
 			result: func(c *Client) any {
@@ -820,8 +833,7 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 			name: "positive by hash",
 			invoke: func(c *Client) (any, error) {
 				cHash, _ := util.Uint160DecodeStringLE("5c9e40a12055c6b9e3f72271c9779958c842135d")
-				start := 1
-				return c.FindStorageByHash(cHash, []byte("aa"), &start)
+				return c.FindStorageByHash(cHash, []byte("aa"), new(1))
 			},
 			serverResponse: `{"id":1,"jsonrpc":"2.0","result":{"results":[{"key":"YWExMA==","value":"djI="}],"truncated":true, "next": 1}}`,
 			result: func(c *Client) any {
@@ -835,8 +847,7 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 		{
 			name: "positive by ID",
 			invoke: func(c *Client) (any, error) {
-				start := 1
-				return c.FindStorageByID(1, []byte("aa"), &start)
+				return c.FindStorageByID(1, []byte("aa"), new(1))
 			},
 			serverResponse: `{"id":1,"jsonrpc":"2.0","result":{"results":[{"key":"YWExMA==","value":"djI="}],"truncated":true, "next": 1}}`,
 			result: func(c *Client) any {
@@ -854,8 +865,7 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 			invoke: func(c *Client) (any, error) {
 				root, _ := util.Uint256DecodeStringLE("252e9d73d49c95c7618d40650da504e05183a1b2eed0685e42c360413c329170")
 				cHash, _ := util.Uint160DecodeStringLE("5c9e40a12055c6b9e3f72271c9779958c842135d")
-				start := 1
-				return c.FindStorageByHashHistoric(root, cHash, []byte("aa"), &start)
+				return c.FindStorageByHashHistoric(root, cHash, []byte("aa"), new(1))
 			},
 			serverResponse: `{"id":1,"jsonrpc":"2.0","result":{"results":[{"key":"YWExMA==","value":"djI="}],"truncated":true, "next": 1}}`,
 			result: func(c *Client) any {
@@ -870,8 +880,7 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 			name: "positive by ID",
 			invoke: func(c *Client) (any, error) {
 				root, _ := util.Uint256DecodeStringLE("252e9d73d49c95c7618d40650da504e05183a1b2eed0685e42c360413c329170")
-				start := 1
-				return c.FindStorageByIDHistoric(root, 1, []byte("aa"), &start)
+				return c.FindStorageByIDHistoric(root, 1, []byte("aa"), new(1))
 			},
 			serverResponse: `{"id":1,"jsonrpc":"2.0","result":{"results":[{"key":"YWExMA==","value":"djI="}],"truncated":true, "next": 1}}`,
 			result: func(c *Client) any {
@@ -1233,8 +1242,7 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 		{
 			name: "positive, tx, block and trigger",
 			invoke: func(c *Client) (any, error) {
-				trig := trigger.Application
-				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, &block.Header{Index: 2}, &trig, nil)
+				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, &block.Header{Index: 2}, new(trigger.Application), nil)
 			},
 			serverResponse: `{"jsonrpc":"2.0","id":1,"result":{"state":"HALT","gasconsumed":"30","script":"EQ==","stack":[{"type":"Integer","value":"1"}],"exception":null,"notifications":[]}}`,
 			result: func(c *Client) any {
@@ -1250,9 +1258,7 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 		{
 			name: "positive, all params",
 			invoke: func(c *Client) (any, error) {
-				trig := trigger.Application
-				v := true
-				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, &block.Header{Index: 2}, &trig, &v)
+				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, &block.Header{Index: 2}, new(trigger.Application), new(true))
 			},
 			serverResponse: `{"jsonrpc":"2.0","id":1,"result":{"state":"HALT","gasconsumed":"30","script":"EQ==","stack":[{"type":"Integer","value":"1"}],"exception":null,"notifications":[]}}`,
 			result: func(c *Client) any {
@@ -1289,16 +1295,14 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 		{
 			name: "invalid positional trigger",
 			invoke: func(c *Client) (any, error) {
-				trig := trigger.Application
-				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, nil, &trig, nil)
+				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, nil, new(trigger.Application), nil)
 			},
 			fails: true,
 		},
 		{
 			name: "invalid positional verbose",
 			invoke: func(c *Client) (any, error) {
-				v := true
-				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, &block.Header{}, nil, &v)
+				return c.InvokeContainedScript(&transaction.Transaction{Script: []byte{byte(opcode.PUSH1)}, Signers: []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}}, &block.Header{}, nil, new(true))
 			},
 			fails: true,
 		},
@@ -1443,6 +1447,18 @@ var rpcClientTestCases = map[string][]rpcClientTestCase{
 			name: "empty pool",
 			invoke: func(c *Client) (any, error) {
 				return c.GetRawNotaryPool()
+			},
+			serverResponse: `{"id":1,"jsonrpc":"2.0","result":{}}`,
+			result: func(c *Client) any {
+				return &result.RawNotaryPool{
+					Hashes: map[util.Uint256][]util.Uint256{},
+				}
+			},
+		},
+		{
+			name: "empty pool, filtered",
+			invoke: func(c *Client) (any, error) {
+				return c.GetRawNotaryPool(util.Uint160{1, 2, 3})
 			},
 			serverResponse: `{"id":1,"jsonrpc":"2.0","result":{}}`,
 			result: func(c *Client) any {
