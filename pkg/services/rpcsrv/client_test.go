@@ -21,11 +21,13 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/nspcc-dev/neo-go/internal/basicchain"
 	"github.com/nspcc-dev/neo-go/internal/testchain"
+	"github.com/nspcc-dev/neo-go/pkg/compiler"
 	"github.com/nspcc-dev/neo-go/pkg/config"
 	"github.com/nspcc-dev/neo-go/pkg/core"
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
 	"github.com/nspcc-dev/neo-go/pkg/core/fee"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/interopnames"
+	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/mempoolevent"
 	"github.com/nspcc-dev/neo-go/pkg/core/mpt"
 	"github.com/nspcc-dev/neo-go/pkg/core/native"
@@ -40,6 +42,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
+	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/network"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/actor"
@@ -56,6 +59,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/oracle"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/policy"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/rolemgmt"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/tempstorage"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/waiter"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/callflag"
@@ -3065,5 +3069,134 @@ func TestClient_GetBlockHeader(t *testing.T) {
 		h, err := c.GetBlockHeaderByIndexVerbose(0)
 		require.NoError(t, err)
 		require.Equal(t, expectedRes, h)
+	})
+}
+
+func TestClientTemporaryStorageContract(t *testing.T) {
+	chain, _, httpSrv := initClearServerWithCustomConfig(t, func(cfg *config.Config) {
+		cfg.ProtocolConfiguration.Hardforks = map[string]uint32{
+			config.HFHuyao.String(): 0,
+		}
+	})
+	for _, b := range getTestBlocks(t) {
+		require.NoError(t, chain.AddBlock(b))
+	}
+
+	c, err := rpcclient.New(context.Background(), httpSrv.URL, rpcclient.Options{})
+	require.NoError(t, err)
+	t.Cleanup(c.Close)
+	require.NoError(t, c.Init())
+
+	act, err := actor.New(c, []actor.SignerAccount{{
+		Signer: transaction.Signer{
+			Account: testchain.CommitteeScriptHash(),
+			Scopes:  transaction.CalledByEntry,
+		},
+		Account: &wallet.Account{
+			Address: testchain.CommitteeAddress(),
+			Contract: &wallet.Contract{
+				Script: testchain.CommitteeVerificationScript(),
+			},
+		},
+	}})
+	require.NoError(t, err)
+
+	// TemporaryStorage's `put` can be called by contracts only, so deploy a
+	// simple one.
+	src := `package tempstoragecaller
+		import "github.com/nspcc-dev/neo-go/pkg/interop/native/tempstorage"
+		func Put(key, value []byte, validTill int) {
+			tempstorage.Put(key, value, validTill)
+		}
+	`
+	ctr := neotest.CompileSource(t, testchain.CommitteeScriptHash(), strings.NewReader(src), &compiler.Options{
+		Name: "tempstoragecaller",
+		Permissions: []manifest.Permission{
+			*manifest.NewPermission(manifest.PermissionWildcard),
+		},
+	})
+	txdeploy, err := management.New(act).DeployUnsigned(ctr.NEF, ctr.Manifest, nil)
+	require.NoError(t, err)
+	txdeploy.Scripts[0].InvocationScript = testchain.SignCommittee(txdeploy)
+	_, err = c.SubmitBlock(*testchain.NewBlock(t, chain, 1, 0, txdeploy))
+	require.NoError(t, err)
+
+	topTimestamp := func() uint64 {
+		h, err := chain.GetHeader(chain.GetHeaderHash(chain.BlockHeight()))
+		require.NoError(t, err)
+		return h.Timestamp
+	}
+	validTill := topTimestamp() + uint64(time.Hour.Milliseconds())
+	records := []struct{ key, value []byte }{
+		{[]byte("aa1"), []byte("one")},
+		{[]byte("aa2"), []byte("two")},
+		{[]byte("bb"), []byte("three")},
+	}
+	txs := make([]*transaction.Transaction, 0, len(records))
+	for _, r := range records {
+		tx, err := act.MakeUnsignedCall(ctr.Hash, "put", nil, r.key, r.value, validTill)
+		require.NoError(t, err)
+		tx.Scripts[0].InvocationScript = testchain.SignCommittee(tx)
+		txs = append(txs, tx)
+	}
+	_, err = c.SubmitBlock(*testchain.NewBlock(t, chain, 1, 0, txs...))
+	require.NoError(t, err)
+	for _, tx := range txs {
+		aer, err := c.GetApplicationLog(tx.Hash(), nil)
+		require.NoError(t, err)
+		require.Equal(t, vmstate.Halt, aer.Executions[0].VMState, aer.Executions[0].FaultException)
+	}
+
+	tmp := tempstorage.NewReader(invoker.New(c, nil))
+
+	t.Run("Get", func(t *testing.T) {
+		for _, r := range records {
+			v, err := tmp.Get(ctr.Hash, r.key)
+			require.NoError(t, err)
+			require.Equal(t, r.value, v)
+		}
+		v, err := tmp.Get(ctr.Hash, []byte("missing"))
+		require.NoError(t, err)
+		require.Nil(t, v)
+		_, err = tmp.Get(util.Uint160{1, 2, 3}, records[0].key) // Unknown contract.
+		require.Error(t, err)
+	})
+	t.Run("GetExpiration", func(t *testing.T) {
+		for _, r := range records {
+			exp, err := tmp.GetExpiration(ctr.Hash, r.key)
+			require.NoError(t, err)
+			require.Equal(t, int64(validTill), exp)
+		}
+		exp, err := tmp.GetExpiration(ctr.Hash, []byte("missing"))
+		require.NoError(t, err)
+		require.Zero(t, exp)
+	})
+	t.Run("Find", func(t *testing.T) {
+		const valuesOnly = int64(storage.FindValuesOnly)
+		expected := []stackitem.Item{stackitem.NewByteArray(records[0].value), stackitem.NewByteArray(records[1].value)}
+
+		iter, err := tmp.Find(ctr.Hash, []byte("aa"), valuesOnly)
+		require.NoError(t, err)
+		items, err := iter.Next(config.DefaultMaxIteratorResultItems)
+		require.NoError(t, err)
+		require.Equal(t, expected, items)
+		require.NoError(t, iter.Terminate())
+
+		items, err = tmp.FindExpanded(ctr.Hash, []byte("aa"), valuesOnly, config.DefaultMaxIteratorResultItems)
+		require.NoError(t, err)
+		require.Equal(t, expected, items)
+
+		// Key-value pairs.
+		items, err = tmp.FindExpanded(ctr.Hash, []byte("bb"), 0, config.DefaultMaxIteratorResultItems)
+		require.NoError(t, err)
+		require.Equal(t, []stackitem.Item{stackitem.NewStruct([]stackitem.Item{
+			stackitem.NewByteArray([]byte("bb")),
+			stackitem.NewByteArray(records[2].value),
+		})}, items)
+
+		// Nothing found.
+		items, err = tmp.FindExpanded(ctr.Hash, []byte("zz"), valuesOnly, config.DefaultMaxIteratorResultItems)
+		require.NoError(t, err)
+		require.Empty(t, items)
 	})
 }
