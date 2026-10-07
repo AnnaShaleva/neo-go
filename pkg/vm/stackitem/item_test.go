@@ -418,7 +418,7 @@ func TestEqualsDeepStructure(t *testing.T) {
 	var layerUp = func(sa *Struct, num int) (*Struct, int) {
 		items := []Item{}
 		for range perStruct {
-			clon, err := sa.Clone()
+			clon, _, err := sa.Clone()
 			require.NoError(t, err)
 			items = append(items, clon)
 		}
@@ -431,7 +431,7 @@ func TestEqualsDeepStructure(t *testing.T) {
 		sa, num = layerUp(sa, num)
 	}
 	require.Less(t, num, MaxComparableNumOfItems)
-	sb, err := sa.Clone()
+	sb, _, err := sa.Clone()
 	require.NoError(t, err)
 	require.True(t, sa.Equals(sb))
 	sa, num = layerUp(sa, num)
@@ -529,76 +529,10 @@ func TestStructClone(t *testing.T) {
 	st0 := Struct{}
 	st := Struct{value: []Item{&st0}}
 	for range MaxClonableNumOfItems - 1 {
-		nst, err := st.Clone()
+		nst, _, err := st.Clone()
 		require.NoError(t, err)
 		st = Struct{value: []Item{nst}}
 	}
-	_, err := st.Clone()
+	_, _, err := st.Clone()
 	require.Error(t, err)
-}
-
-func TestDeepCopy(t *testing.T) {
-	testCases := []struct {
-		name string
-		item Item
-	}{
-		{"Integer", NewBigInteger(big.NewInt(1))},
-		{"ByteArray", NewByteArray([]byte{1, 2, 3})},
-		{"Buffer", NewBuffer([]byte{1, 2, 3})},
-		{"Bool", NewBool(true)},
-		{"Pointer", NewPointer(1, []byte{1, 2, 3})},
-		{"Interop", NewInterop(&[]byte{1, 2})},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := DeepCopy(tc.item, false)
-			if immut, ok := tc.item.(Immutable); ok {
-				immut.MarkAsReadOnly() // tiny hack for test to be able to compare object references.
-			}
-			require.Equal(t, tc.item, actual)
-			if tc.item.Type() != BooleanT {
-				require.False(t, actual == tc.item)
-			}
-		})
-	}
-
-	t.Run("Null", func(t *testing.T) {
-		require.Equal(t, Null{}, DeepCopy(Null{}, false))
-	})
-
-	t.Run("Array", func(t *testing.T) {
-		arr := NewArray(make([]Item, 2))
-		arr.value[0] = NewBool(true)
-		arr.value[1] = arr
-
-		actual := DeepCopy(arr, false)
-		arr.isReadOnly = true // tiny hack for test to be able to compare object references.
-		require.Equal(t, arr, actual)
-		require.False(t, arr == actual)
-		require.True(t, actual == actual.(*Array).value[1])
-	})
-
-	t.Run("Struct", func(t *testing.T) {
-		arr := NewStruct(make([]Item, 2))
-		arr.value[0] = NewBool(true)
-		arr.value[1] = arr
-
-		actual := DeepCopy(arr, false)
-		arr.isReadOnly = true // tiny hack for test to be able to compare object references.
-		require.Equal(t, arr, actual)
-		require.False(t, arr == actual)
-		require.True(t, actual == actual.(*Struct).value[1])
-	})
-
-	t.Run("Map", func(t *testing.T) {
-		m := NewMap()
-		m.Add(NewBool(true), m)
-		m.Add(NewBigInteger(big.NewInt(1)), NewByteArray([]byte{1, 2, 3}))
-
-		actual := DeepCopy(m, false)
-		m.isReadOnly = true // tiny hack for test to be able to compare object references.
-		require.Equal(t, m, actual)
-		require.False(t, m == actual)
-		require.True(t, actual == actual.(*Map).value[0].Value)
-	})
 }
