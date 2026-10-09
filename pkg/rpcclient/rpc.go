@@ -609,31 +609,28 @@ func (c *Client) getStorageHistoric(params []any) ([]byte, error) {
 }
 
 // FindStorageByHash returns contract storage items by the given contract hash and prefix.
-// If `start` index is specified, items starting from `start` index are being returned
-// (including item located at the start index).
-func (c *Client) FindStorageByHash(contractHash util.Uint160, prefix []byte, start *int) (result.FindStorage, error) {
-	var params = []any{contractHash.StringLE(), prefix}
-	if start != nil {
-		params = append(params, *start)
-	} else {
-		// C# node expects `start` parameter in any case.
-		params = append(params, 0)
-	}
-	return c.findStorage(params)
+// If `start` key is specified, items following it are being returned (the `start`
+// key itself is excluded). `start` is usually the Next field of the previous
+// result and must have the given prefix.
+func (c *Client) FindStorageByHash(contractHash util.Uint160, prefix []byte, start []byte) (result.FindStorage, error) {
+	return c.findStorage([]any{contractHash.StringLE(), prefix, nonNil(start)})
 }
 
 // FindStorageByID returns contract storage items by the given contract ID and prefix.
-// If `start` index is specified, items starting from `start` index are being returned
-// (including item located at the start index).
-func (c *Client) FindStorageByID(contractID int32, prefix []byte, start *int) (result.FindStorage, error) {
-	var params = []any{contractID, prefix}
-	if start != nil {
-		params = append(params, *start)
-	} else {
-		// C# node expects `start` parameter in any case.
-		params = append(params, 0)
+// If `start` key is specified, items following it are being returned (the `start`
+// key itself is excluded). `start` is usually the Next field of the previous
+// result and must have the given prefix.
+func (c *Client) FindStorageByID(contractID int32, prefix []byte, start []byte) (result.FindStorage, error) {
+	return c.findStorage([]any{contractID, prefix, nonNil(start)})
+}
+
+// nonNil returns an empty slice for nil input to make it encoded as an empty
+// string rather than null.
+func nonNil(b []byte) []byte {
+	if b == nil {
+		return []byte{}
 	}
-	return c.findStorage(params)
+	return b
 }
 
 func (c *Client) findStorage(params []any) (result.FindStorage, error) {
@@ -645,32 +642,28 @@ func (c *Client) findStorage(params []any) (result.FindStorage, error) {
 }
 
 // FindStorageByHashHistoric returns historical contract storage items by the given stateroot,
-// historical contract hash and historical prefix. If `start` index is specified, then items
-// starting from `start` index are being returned (including item located at the start index).
+// historical contract hash and historical prefix. If `start` key is specified, then items
+// following it are being returned (the `start` key itself is excluded).
 func (c *Client) FindStorageByHashHistoric(stateroot util.Uint256, historicalContractHash util.Uint160, historicalPrefix []byte,
-	start *int) (result.FindStorage, error) {
+	start []byte) (result.FindStorage, error) {
 	if historicalPrefix == nil {
 		historicalPrefix = []byte{}
 	}
 	var params = []any{stateroot.StringLE(), historicalContractHash.StringLE(), historicalPrefix}
-	if start != nil {
-		params = append(params, start)
-	}
+	params = append(params, nonNil(start))
 	return c.findStorageHistoric(params)
 }
 
 // FindStorageByIDHistoric returns historical contract storage items by the given stateroot,
-// historical contract ID and historical prefix. If `start` index is specified, then items
-// starting from `start` index are being returned (including item located at the start index).
+// historical contract ID and historical prefix. If `start` key is specified, then items
+// following it are being returned (the `start` key itself is excluded).
 func (c *Client) FindStorageByIDHistoric(stateroot util.Uint256, historicalContractID int32, historicalPrefix []byte,
-	start *int) (result.FindStorage, error) {
+	start []byte) (result.FindStorage, error) {
 	if historicalPrefix == nil {
 		historicalPrefix = []byte{}
 	}
 	var params = []any{stateroot.StringLE(), historicalContractID, historicalPrefix}
-	if start != nil {
-		params = append(params, start)
-	}
+	params = append(params, nonNil(start))
 	return c.findStorageHistoric(params)
 }
 
