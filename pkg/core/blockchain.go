@@ -1963,12 +1963,18 @@ func (bc *Blockchain) GetStateSyncModule() *statesync.Module {
 // This is the only way to change Blockchain state.
 func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error {
 	var (
-		cache          = bc.dao.GetPrivate()
+		// cache holds a single read-only DB view for the whole block processing
+		// to avoid nested read transactions that can deadlock with a pending
+		// DB write. The view is shared with aerCache.
+		cache          = bc.dao.GetPrivateWithView()
 		aerCache       = bc.dao.GetPrivate()
 		appExecResults = make([]*state.AppExecResult, 0, 2+len(block.Transactions))
 		aerchan        = make(chan *state.AppExecResult, len(block.Transactions)/8) // Tested 8 and 4 with no practical difference, but feel free to test more and tune.
 		aerdone        = make(chan error)
 	)
+	// Release the view on any exit path (idempotent).
+	defer func() { _ = cache.Store.Finalize() }()
+	aerCache.Store.View = cache.Store.View
 	go func() {
 		var (
 			kvcache      = aerCache
@@ -2085,6 +2091,7 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 	appExecResults = append(appExecResults, aer)
 	aerchan <- aer
 	close(aerchan)
+
 	b := mpt.MapToMPTBatch(cache.Store.GetStorageChanges())
 	mpt, sr, err := bc.stateRoot.AddMPTBatch(block.Index, b, cache.Store)
 	if err != nil {
@@ -2121,6 +2128,10 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 	}
 
 	aererr := <-aerdone
+	// The view must be released before waiting for persistence below, otherwise
+	// the persisting routine can't take the DB write lock.
+	_ = cache.Store.Finalize()
+	aerCache.Store.View = nil
 	if aererr != nil {
 		return aererr
 	}
@@ -2502,19 +2513,19 @@ func (bc *Blockchain) persist() (time.Duration, error) {
 
 	persisted, err = bc.dao.Persist()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to persist dao: %w", err)
 	}
 	if persisted > 0 {
 		bHeight, err := bc.persistent.GetCurrentBlockHeight()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("failed to get current block height: %w", err)
 		}
 		oldHeight := atomic.SwapUint32(&bc.persistedHeight, bHeight)
 		diff := bHeight - oldHeight
 
 		storedHeaderHeight, _, err := bc.persistent.GetCurrentHeaderHeight()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("failed to get current header height: %w", err)
 		}
 		duration = time.Since(start)
 		// Low number of keys is not representative and duration _can_

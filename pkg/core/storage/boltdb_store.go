@@ -91,13 +91,30 @@ func NewBoltDBStoreFromBucket(db *bbolt.DB, bucket []byte) (*BoltDBStore, error)
 }
 
 // Get implements the Store interface.
-func (s *BoltDBStore) Get(key []byte) (val []byte, err error) {
-	err = s.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket(s.bkt)
-		// Value from Get is only valid for the lifetime of transaction, #1482
-		val = bytes.Clone(b.Get(key))
-		return nil
-	})
+func (s *BoltDBStore) Get(key []byte) ([]byte, error) {
+	view, err := s.BeginView()
+	if err != nil {
+		return nil, err
+	}
+	defer view.Close()
+	return s.GetWithView(view, key)
+}
+
+// Seek implements the Store interface.
+func (s *BoltDBStore) Seek(rng SeekRange, f func(k, v []byte) bool) {
+	view, err := s.BeginView()
+	if err != nil {
+		panic(err)
+	}
+	defer view.Close()
+	s.SeekWithView(view, rng, f)
+}
+
+// GetWithView implements the Store interface.
+func (s *BoltDBStore) GetWithView(tx IView, key []byte) (val []byte, err error) {
+	b := tx.(boltViewAdapter).Bucket(s.bkt)
+	// Value from Get is only valid for the lifetime of transaction, #1482
+	val = bytes.Clone(b.Get(key))
 	if val == nil {
 		err = ErrKeyNotFound
 	}
@@ -139,9 +156,30 @@ func (s *BoltDBStore) SeekGC(rng SeekRange, keepCont func(k, v []byte) (bool, bo
 	})
 }
 
-// Seek implements the Store interface.
-func (s *BoltDBStore) Seek(rng SeekRange, f func(k, v []byte) bool) {
-	err := boltSeek(s.db.View, s.bkt, rng, func(_ *bbolt.Cursor, k, v []byte) (bool, error) {
+// viewAdapter is a wrapper around bbolt transaction implementing IView interface.
+type boltViewAdapter struct {
+	*bbolt.Tx
+}
+
+// Close implements IView interface.
+func (v boltViewAdapter) Close() error {
+	return v.Rollback()
+}
+
+// BeginView implements the Store interface.
+func (s *BoltDBStore) BeginView() (IView, error) {
+	tx, err := s.db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+	return boltViewAdapter{tx}, nil
+}
+
+// SeekWithView implements the Store interface.
+func (s *BoltDBStore) SeekWithView(view IView, rng SeekRange, f func(k, v []byte) bool) {
+	err := boltSeek(func(f func(*bbolt.Tx) error) error {
+		return f(view.(boltViewAdapter).Tx)
+	}, s.bkt, rng, func(_ *bbolt.Cursor, k, v []byte) (bool, error) {
 		return f(k, v), nil
 	})
 	if err != nil {

@@ -37,6 +37,30 @@ func NewTrieStore(root util.Uint256, mode TrieMode, backed storage.Store) *TrieS
 // Get implements the Store interface. It can return [errors.ErrUnsupported]
 // for unsupported operations.
 func (m *TrieStore) Get(key []byte) ([]byte, error) {
+	return m.GetWithView(nil, key)
+}
+
+// Seek offers seek functionality over the underlying DB.
+func (m *TrieStore) Seek(rng storage.SeekRange, f func(k, v []byte) bool) {
+	m.SeekWithView(nil, rng, f) // TrieStore itself doesn't hold any iew, it's the lower's Store responsibility.
+}
+
+// trieView is a no-op storage.IView: TrieStore doesn't hold any DB resources.
+type trieView struct{}
+
+// Close implements the storage.IView interface.
+func (trieView) Close() error { return nil }
+
+// BeginView implements the Store interface. TrieStore doesn't hold any
+// DB view itself, it's the responsibility of the underlying DB.
+func (m *TrieStore) BeginView() (storage.IView, error) {
+	return trieView{}, nil
+}
+
+// GetWithView implements the Store interface. It can return [errors.ErrUnsupported]
+// for unsupported operations. It is not designated for the external usage. Use
+// Get instead.
+func (m *TrieStore) GetWithView(_ storage.IView, key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, fmt.Errorf("%w: Get is supported only for contract storage items", errors.ErrUnsupported)
 	}
@@ -61,8 +85,8 @@ func (m *TrieStore) PutChangeSet(puts map[string][]byte, stor map[string][]byte)
 	return fmt.Errorf("%w: PutChangeSet is not supported", errors.ErrUnsupported)
 }
 
-// Seek implements the Store interface.
-func (m *TrieStore) Seek(rng storage.SeekRange, f func(k, v []byte) bool) {
+// SeekWithView implements the Store interface.
+func (m *TrieStore) SeekWithView(_ storage.IView, rng storage.SeekRange, f func(k, v []byte) bool) {
 	prefix := storage.KeyPrefix(rng.Prefix[0])
 	if prefix != storage.STStorage && prefix != storage.STTempStorage { // Prefix is always non-empty.
 		panic(fmt.Errorf("%w: Seek is supported only for contract storage items", errors.ErrUnsupported))
