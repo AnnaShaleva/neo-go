@@ -101,8 +101,17 @@ func NewContext(trigger trigger.Type, bc Ledger, d *dao.Simple, baseExecFee, bas
 	getContract func(*dao.Simple, util.Uint160) (*state.Contract, error), natives []Contract,
 	loadTokenFunc func(ic *Context, id int32) error,
 	block *block.Block, tx *transaction.Transaction, log *zap.Logger) *Context {
-	var (
+	var dao *dao.Simple
+	if d.Store.View == nil {
+		// Open a single read-only DB view to be used for all reads made by this
+		// context. It prevents nested read transactions that can deadlock with a
+		// pending DB write. The view is released by Finalize, so the caller MUST
+		// call it once the context is no longer needed.
+		dao = d.GetPrivateWithView()
+	} else {
 		dao = d.GetPrivate()
+	}
+	var (
 		cfg = bc.GetConfig()
 		pch PolicyChecker
 	)
@@ -572,17 +581,27 @@ func (ic *Context) RegisterCancelFunc(f context.CancelFunc) {
 	}
 }
 
-// Finalize calls all registered cancel functions to release the occupied resources.
+// Finalize calls all registered cancel functions and releases the DB view
+// opened by the context (if any). It must be called for every context created
+// via NewContext (directly or via Blockchain's GetTestVM/GetTestHistoricVM)
+// that is not run via Exec, otherwise DB read lock is held forever.
 func (ic *Context) Finalize() {
+	ic.cancel()
+	_ = ic.DAO.Store.Finalize()
+}
+
+func (ic *Context) cancel() {
 	for _, f := range ic.cancelFuncs {
 		f()
 	}
 	ic.cancelFuncs = nil
 }
 
-// Exec executes loaded VM script and calls registered finalizers to release the occupied resources.
+// Exec executes loaded VM script and calls registered cancel functions to
+// release the occupied resources. It doesn't release the DB view, so the
+// context can be reused for another Exec; call Finalize when done.
 func (ic *Context) Exec() error {
-	defer ic.Finalize()
+	defer ic.cancel()
 	return ic.VM.Run()
 }
 

@@ -2542,6 +2542,7 @@ func (s *Server) prepareInvocationContext(t trigger.Type, script []byte, contrac
 	if t == trigger.Verification && b == nil { // don't initialize verification context for contained invocations.
 		err = s.chain.InitVerificationContext(ic, contractScriptHash, &transaction.Witness{InvocationScript: script, VerificationScript: []byte{}})
 		if err != nil {
+			ic.Finalize()
 			switch {
 			case errors.Is(err, core.ErrUnknownVerificationContract):
 				return nil, neorpc.WrapErrorWithData(neorpc.ErrUnknownContract, err.Error())

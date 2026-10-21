@@ -2831,6 +2831,7 @@ func (bc *Blockchain) CalculateClaimable(acc util.Uint160, endHeight uint32) (*b
 		return nil, err
 	}
 	ic := bc.newInteropContext(trigger.Application, bc.dao, nextBlock, nil)
+	defer ic.Finalize()
 	return bc.neo.CalculateBonus(ic, acc, endHeight)
 }
 
@@ -3276,13 +3277,15 @@ func (bc *Blockchain) GetTestHistoricVM(t trigger.Type, tx *transaction.Transact
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve stateroot for height %d: %w", b.Index, err)
 	}
-	s := mpt.NewTrieStore(sr.Root, mode, storage.NewPrivateMemCachedStore(bc.dao.Store))
+	lower := storage.NewPrivateMemCachedStoreWithView(bc.dao.Store)
+	s := mpt.NewTrieStore(sr.Root, mode, lower)
 	dTrie := dao.NewSimple(s, bc.config.StateRootInHeader)
 	dTrie.Version = bc.dao.Version
 	// Initialize native cache before passing DAO to interop context constructor, because
 	// the constructor will call BaseExecFee/StoragePrice policy methods on the passed DAO.
 	err = bc.initializeNativeCache(b.Index, dTrie)
 	if err != nil {
+		_ = lower.Finalize()
 		return nil, fmt.Errorf("failed to initialize native cache backed by historic DAO: %w", err)
 	}
 	systemInterop := bc.newInteropContext(t, dTrie, b, tx)
@@ -3397,6 +3400,7 @@ func (bc *Blockchain) InitVerificationContext(ic *interop.Context, hash util.Uin
 // the amount of GAS consumed during verification and an error.
 func (bc *Blockchain) VerifyWitness(h util.Uint160, c hash.Hashable, w *transaction.Witness, gas int64) (int64, error) {
 	ic := bc.newInteropContext(trigger.Verification, bc.dao, nil, nil)
+	defer ic.Finalize()
 	ic.Container = c
 	if tx, ok := c.(*transaction.Transaction); ok {
 		ic.Tx = tx
@@ -3446,6 +3450,7 @@ func (bc *Blockchain) verifyHashAgainstScript(hash util.Uint160, witness *transa
 // Golang implementation of VerifyWitnesses method in C# (https://github.com/neo-project/neo/blob/master/neo/SmartContract/Helper.cs#L87).
 func (bc *Blockchain) verifyTxWitnesses(t *transaction.Transaction, block *block.Block, isPartialTx bool, verificationFee ...int64) error {
 	interopCtx := bc.newInteropContext(trigger.Verification, bc.dao, block, t)
+	defer interopCtx.Finalize()
 	var gasLimit int64
 	if len(verificationFee) == 0 {
 		gasLimit = t.NetworkFee - int64(t.Size())*bc.FeePerByte() - bc.CalculateAttributesFee(t)

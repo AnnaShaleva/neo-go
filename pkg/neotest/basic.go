@@ -346,6 +346,7 @@ func AddNetworkFee(t testing.TB, bc *core.Blockchain, tx *transaction.Transactio
 
 			ic, err := bc.GetTestVM(trigger.Verification, new(*tx), nil)
 			require.NoError(t, err)
+			t.Cleanup(ic.Finalize)
 
 			ic.UseSigners(tx.Signers)
 			ic.VM.SetGasLimit(bc.GetMaxVerificationGAS())

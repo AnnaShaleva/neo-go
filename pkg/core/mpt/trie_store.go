@@ -20,6 +20,9 @@ import (
 // backend store.
 type TrieStore struct {
 	trie *Trie
+	// cache is the MemCachedStore the trie reads from. If it owns an opened
+	// DB view, the view lifetime is bound to the view returned by BeginView.
+	cache *storage.MemCachedStore
 }
 
 // NewTrieStore returns a new ready to use MPT-backed storage.
@@ -30,7 +33,8 @@ func NewTrieStore(root util.Uint256, mode TrieMode, backed storage.Store) *TrieS
 	}
 	tr := NewTrie(NewHashNode(root), mode, cache)
 	return &TrieStore{
-		trie: tr,
+		trie:  tr,
+		cache: cache,
 	}
 }
 
@@ -45,16 +49,26 @@ func (m *TrieStore) Seek(rng storage.SeekRange, f func(k, v []byte) bool) {
 	m.SeekWithView(nil, rng, f) // TrieStore itself doesn't hold any iew, it's the lower's Store responsibility.
 }
 
-// trieView is a no-op storage.IView: TrieStore doesn't hold any DB resources.
-type trieView struct{}
+// trieView is a storage.IView bound to the view owned by the TrieStore's
+// backing cache (if any).
+type trieView struct {
+	cache *storage.MemCachedStore
+}
 
-// Close implements the storage.IView interface.
-func (trieView) Close() error { return nil }
+// Close implements the storage.IView interface. It releases the DB view opened
+// by the backing cache (if it owns any).
+func (v trieView) Close() error {
+	if v.cache == nil {
+		return nil
+	}
+	return v.cache.Finalize()
+}
 
-// BeginView implements the Store interface. TrieStore doesn't hold any
-// DB view itself, it's the responsibility of the underlying DB.
+// BeginView implements the Store interface. TrieStore reads everything via
+// its backing cache, so the returned view releases the DB view opened by that
+// cache (e.g. created via storage.NewPrivateMemCachedStoreWithView), if any.
 func (m *TrieStore) BeginView() (storage.IView, error) {
-	return trieView{}, nil
+	return trieView{cache: m.cache}, nil
 }
 
 // GetWithView implements the Store interface. It can return [errors.ErrUnsupported]

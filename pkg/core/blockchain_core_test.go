@@ -348,6 +348,7 @@ func TestBlockchain_BaseExecFeeBaseStoragePrice_Compat(t *testing.T) {
 
 	check := func(t *testing.T) {
 		ic := bc.newInteropContext(trigger.Application, bc.dao, bc.topBlock.Load().(*block.Block), nil)
+		t.Cleanup(ic.Finalize)
 		require.Equal(t, bc.GetBaseExecFee(), ic.BaseExecFee())
 		require.Equal(t, bc.GetStoragePrice(), ic.BaseStorageFee())
 	}

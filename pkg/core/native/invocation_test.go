@@ -77,6 +77,7 @@ func TestNativeContract_InvokeInternal(t *testing.T) {
 	t.Run("fail, bad current script hash", func(t *testing.T) {
 		ic, err := bc.GetTestVM(trigger.Application, nil, nil)
 		require.NoError(t, err)
+		t.Cleanup(ic.Finalize)
 		v := ic.SpawnVM()
 		fakeH := util.Uint160{1, 2, 3}
 		v.LoadScriptWithHash(clState.NEF.Script, fakeH, callflag.All)
@@ -109,6 +110,7 @@ func TestNativeContract_InvokeInternal(t *testing.T) {
 
 			ic, err := bcBad.GetTestVM(trigger.Application, nil, nil)
 			require.NoError(t, err)
+			t.Cleanup(ic.Finalize)
 			v := ic.SpawnVM()
 			v.LoadScriptWithHash(clState.NEF.Script, clState.Hash, callflag.All) // hash is not affected by native update history
 			input := []byte{1, 2, 3, 4}
@@ -124,6 +126,7 @@ func TestNativeContract_InvokeInternal(t *testing.T) {
 			eBad.AddNewBlock(t)
 			ic, err = bcBad.GetTestVM(trigger.Application, nil, nil)
 			require.NoError(t, err)
+			t.Cleanup(ic.Finalize)
 			v = ic.SpawnVM()
 			v.LoadScriptWithHash(clState.NEF.Script, clState.Hash, callflag.All) // hash is not affected by native update history
 			v.Estack().PushVal(input)
@@ -145,6 +148,7 @@ func TestNativeContract_InvokeInternal(t *testing.T) {
 		})
 		ic, err := bc.GetTestVM(trigger.Application, nil, nil)
 		require.NoError(t, err)
+		t.Cleanup(ic.Finalize)
 		v := ic.SpawnVM()
 		v.LoadScriptWithHash(manState.NEF.Script, manState.Hash, callflag.States|callflag.AllowNotify)
 		input := []byte{1, 2, 3, 4}
@@ -167,6 +171,7 @@ func TestNativeContract_InvokeInternal(t *testing.T) {
 
 		ic, err := bc.GetTestVM(trigger.Application, nil, nil)
 		require.NoError(t, err)
+		t.Cleanup(ic.Finalize)
 		v := ic.SpawnVM()
 		v.LoadScriptWithHash(manState.NEF.Script, manState.Hash, callflag.States|callflag.AllowNotify)
 		input := []byte{1, 2, 3, 4}
@@ -183,6 +188,7 @@ func TestNativeContract_InvokeInternal(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ic, err := bc.GetTestVM(trigger.Application, nil, nil)
 		require.NoError(t, err)
+		t.Cleanup(ic.Finalize)
 		v := ic.SpawnVM()
 		v.LoadScriptWithHash(clState.NEF.Script, clState.Hash, callflag.All)
 		input := []byte{1, 2, 3, 4}

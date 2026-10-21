@@ -27,6 +27,8 @@ type MemCachedStore struct {
 	// MemCachedStore is released via
 	View    IView
 	closeTx bool
+	// asyncSeeks tracks SeekAsync routines using the shared View.
+	asyncSeeks sync.WaitGroup
 }
 
 type (
@@ -63,6 +65,9 @@ func NewMemCachedStore(lower Store) *MemCachedStore {
 // MemCachedStore and, recursively, by its parents (if so).
 func (s *MemCachedStore) Finalize() error {
 	if s.private && s.closeTx && s.View != nil {
+		// SeekAsync routines use the view, wait for them (their contexts must
+		// be cancelled by the caller beforehand).
+		s.asyncSeeks.Wait()
 		err := s.View.Close()
 		s.View = nil
 		if err != nil {
@@ -274,10 +279,14 @@ func (s *MemCachedStore) SeekAsync(ctx context.Context, rng SeekRange, cutPrefix
 			panic(err)
 		}
 		closeView = true
+	} else {
+		s.asyncSeeks.Add(1)
 	}
 	go func() {
 		if closeView {
 			defer view.Close()
+		} else {
+			defer s.asyncSeeks.Done()
 		}
 		performSeek(ctx, view, ps, memRes, rng, cutPrefix, func(k, v []byte) bool {
 			select {
